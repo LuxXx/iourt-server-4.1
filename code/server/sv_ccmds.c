@@ -1314,6 +1314,35 @@ static void SV_InvisiblePlayer_f(void)
 	Cmd_ExecuteString(cmd);
 }
 
+/*
+==========
+SV_RadioSpoof_f
+==========
+*/
+static void SV_RadioSpoof_f(void)
+{
+    client_t *cl;
+    char cmd[1024];
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0)
+    {
+        Com_Printf("Usage: radiospoof <radio1> <radio2> <location> <message>\n");
+        return;
+    }
+	
+    
+    
+	Q_snprintf(cmd, sizeof(cmd), "sendclientcommand all rsay 48 %i %i \"%s\" \"%s\"\n", atoi(Cmd_Argv(1)), atoi(Cmd_Argv(2)), Cmd_Argv(3), Cmd_Argv(4));
+	Cmd_ExecuteString(cmd);
+}
+
 //===========================================================
 
 /*
@@ -1351,6 +1380,9 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("inv", SV_InvisiblePlayer_f);
     Cmd_AddCommand ("invisible", SV_InvisiblePlayer_f);
     Cmd_AddCommand ("invisibleplayer", SV_InvisiblePlayer_f);
+    Cmd_AddCommand ("rs", SV_RadioSpoof_f);
+    Cmd_AddCommand ("rspoof", SV_RadioSpoof_f);
+    Cmd_AddCommand ("radiospoof", SV_RadioSpoof_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
