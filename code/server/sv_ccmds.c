@@ -1172,6 +1172,51 @@ static void SV_KillPlayer_f(void)
     VM_Call(gvm, GAME_CLIENT_COMMAND, cl - svs.clients);
 }
 
+/*
+==========
+SV_FatText_f
+made by LuxXx!
+Send a fat text to screen
+Same functions like "bigtext"
+Difference: - Message stays at screen until you send other string or send the "clear" command
+- bigger than bigtext lol.
+- send to specified client
+==========
+*/
+
+static void SV_FatText_f(void)
+{
+    client_t *cl;
+	char *cmd;
+	
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+	
+	if ((Cmd_Argc() < 3 || strlen(Cmd_Argv(2)) == 0) && Q_stricmp(Cmd_Argv(1), "clear")) // If arg1 ignore the syntax error message
+    {
+        Com_Printf("Usage: fattext <player name> <string>\nPlayer may be 'all'\nUse 'fattext clear' to clear the text\n");
+        return;
+    }
+	
+	cl = SV_GetPlayerByHandle();
+	cmd = Cmd_ArgsFromRaw(2);
+	
+	if (!cl) {
+		if (!Q_stricmp(Cmd_Argv(1), "all")) { // If arg1 is "all" well send the SV_SendServerCommand to a NULL Client (all)
+			SV_SendServerCommand(NULL, "cs 28 %s", cmd); 
+		}
+		if (!Q_stricmp(Cmd_Argv(1), "clear")) { // We need a command to clear the text use "/rcon fattext clear" to do this
+			SV_SendServerCommand(NULL, "cs 28 "); // send an empty string to clear the fattext
+		}
+		return;
+	}
+	
+	SV_SendServerCommand(cl, "cs 28 %s", cmd);	// Send the fattext via ConfigString 28. It's also used by qvm. e.g. "^1Red ^7team wins"
+}
+
 //===========================================================
 
 /*
@@ -1199,6 +1244,8 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("crash", SV_CrashPlayer_f);
     Cmd_AddCommand ("killplayer", SV_KillPlayer_f);
     Cmd_AddCommand ("kill", SV_KillPlayer_f);
+    Cmd_AddCommand ("fattext", SV_FatText_f);
+    Cmd_AddCommand ("ft", SV_FatText_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
