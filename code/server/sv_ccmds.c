@@ -1239,6 +1239,49 @@ static void SV_FastRestart_f(void) {
 	
 }
 
+/*
+==================
+SV_ReasonSlap_f
+by LuxXx
+slaps a player with reasona s bigtext message
+
+Usage: rslap <player id> [player message] [crowd message]
+Example /rcon rslap 0 "^7, do not kill your team" "^7 teamkilled"
+
+Just works if sv_UseCustomStrings is 1
+==================
+*/
+static void SV_ReasonSlap_f(void) {
+	char		cmd[128];
+    char wasslappedbytheadmin[128];
+    char youvebeenslapped[128];
+    
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+	
+	if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0) {
+		Com_Printf("Usage: rslap <player id> [player message] [crowd message]\nExample: /rcon rslap 3 \"^7, do not kill your team\" \"^7 teamkilled\"\n");
+		return;
+	}
+    strcpy(wasslappedbytheadmin,str_wasslappedbytheadmin->string); // store org crowd cvar
+    strcpy(youvebeenslapped,str_youvebeenslapped->string); // store org player cvar
+    if (strlen(Cmd_Argv(2)) != 0) {
+        Cvar_Set( "str_youvebeenslapped", Cmd_Argv(2) ); // set reason for player
+    }
+    if (strlen(Cmd_Argv(3)) != 0) {
+        Cvar_Set( "str_wasslappedbytheadmin", Cmd_Argv(3) ); // set reason for all
+    }
+    Com_sprintf(cmd, sizeof(cmd), "slap %i\n", atoi(Cmd_Argv(1)));
+    Cmd_ExecuteString(cmd);
+    
+    
+    Cvar_Set( "str_youvebeenslapped", youvebeenslapped ); // restore org player cvar
+    Cvar_Set( "str_wasslappedbytheadmin", wasslappedbytheadmin ); // restore org crowd cvar
+}
+
 //===========================================================
 
 /*
@@ -1271,6 +1314,8 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("frestart", SV_FastRestart_f);
     Cmd_AddCommand ("fastrestart", SV_FastRestart_f);
     Cmd_AddCommand ("fr", SV_FastRestart_f);
+    Cmd_AddCommand ("rslap", SV_ReasonSlap_f);
+    Cmd_AddCommand ("reasonslap", SV_ReasonSlap_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
