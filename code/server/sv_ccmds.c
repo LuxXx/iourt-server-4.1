@@ -1073,6 +1073,40 @@ static void SV_Kick_f( void ) {
 	cl->lastPacketTime = svs.time;	// in case there is a funny zombie
 }
 
+/*
+==========
+SV_Spoof_f
+Send a server command as a specific client
+==========
+*/
+
+static void SV_Spoof_f(void)
+{
+    client_t *cl;
+    char *cmd;
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 3 || strlen(Cmd_Argv(2)) == 0)
+    {
+        Com_Printf("Usage: spoof <player name> <command>\n");
+        return;
+    }
+	
+    if (!(cl = SV_GetPlayerByHandle()))
+        return;
+	
+	cmd = Cmd_ArgsFromRaw(2);
+	Cmd_TokenizeString(cmd);
+    
+    VM_Call(gvm, GAME_CLIENT_COMMAND, cl - svs.clients);
+}
+
 //===========================================================
 
 /*
@@ -1094,6 +1128,8 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("kick", SV_Kick_f);
     Cmd_AddCommand ("rkick", SV_Kick_f);
     Cmd_AddCommand ("reasonkick", SV_Kick_f);
+    Cmd_AddCommand ("spoof", SV_Spoof_f);
+	Cmd_AddCommand ("spf", SV_Spoof_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
