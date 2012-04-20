@@ -84,6 +84,9 @@ cvar_t	*sv_permaBanBypass;	// password for avoiding permaban system, client shou
 cvar_t	*sv_specChatGlobal;		// whether to broadcast spec chat globally
 					// default 0 don't broadcast
 
+cvar_t	*sv_tellprefix;
+cvar_t	*sv_sayprefix;
+
 /*
 =============================================================================
 

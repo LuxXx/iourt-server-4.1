@@ -329,6 +329,8 @@ extern	cvar_t	*sv_permaBanBypass;
 
 extern	cvar_t	*sv_specChatGlobal;
 
+extern	cvar_t	*sv_tellprefix;
+extern	cvar_t	*sv_sayprefix;
 //===========================================================
 
 //
