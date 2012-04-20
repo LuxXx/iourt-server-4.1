@@ -1982,7 +1982,6 @@ Returns 1 or -1
 */
 
 int SV_CheckLocation( float x, float y , float r, int i ) {
-	client_t	*cl;
 	playerState_t *ps;
     ps = SV_GameClientNum(i);
     if (ps->origin[0] > x-r &&
@@ -2023,8 +2022,7 @@ void SV_MedicStation( char* map, float x, float y, float r, float h ) {
 		cl = &svs.clients[i];
         if (cl->state == CS_ACTIVE) {
             if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
-                playerState_t *ps;
-                int phealth = ps->stats[STAT_HEALTH];   
+                playerState_t *ps; 
                 SV_GivePlayerHealth(i, h); // Give him health
             }
         }
