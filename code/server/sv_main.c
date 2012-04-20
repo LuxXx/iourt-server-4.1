@@ -87,6 +87,9 @@ cvar_t	*sv_specChatGlobal;		// whether to broadcast spec chat globally
 cvar_t	*sv_tellprefix;
 cvar_t	*sv_sayprefix;
 
+cvar_t	*sv_minTeamChangeHealth;
+cvar_t	*sv_minKillHealth;
+
 /*
 =============================================================================
 

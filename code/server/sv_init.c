@@ -707,6 +707,9 @@ void SV_Init (void) {
 	sv_tellprefix = Cvar_Get ("sv_tellprefix", "console_tell: ", CVAR_ARCHIVE );
     sv_sayprefix = Cvar_Get ("sv_sayprefix", "console: ", CVAR_ARCHIVE );
 
+    sv_minTeamChangeHealth = Cvar_Get("sv_minTeamChangeHealth", "0", CVAR_ARCHIVE);
+    sv_minKillHealth = Cvar_Get("sv_minKillHealth", "0", CVAR_ARCHIVE);
+
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

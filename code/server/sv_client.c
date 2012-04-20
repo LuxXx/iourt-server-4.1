@@ -2293,7 +2293,22 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 				}
 			}
             
-            
+            // The Original Idea of this Patch was made by Mickael9
+            // I found some bugs and rewrote the patch. I also included echos to inform the player
+            // about the failed teamchange/kill. I found a bug which prohibts the player to rejoin the game after he was forc to spec with less than allowed teamchangehealth
+            playerState_t *ps = SV_GameClientNum(cl - svs.clients);
+            int myteam = ps->persistant[PERS_TEAM]; // Free = 0 / Red = 1 / Blue = 2 / Spectator = 3
+            int health = ps->stats[STAT_HEALTH];
+            if (!Q_stricmp("kill", Cmd_Argv(0)) && health && health < sv_minKillHealth->integer && ( myteam == 0 || myteam == 1 || myteam == 2 )) {
+                
+                SV_SendServerCommand(cl, "print \"You need a minimum of %i percent health to kill yourself.\n\"", sv_minKillHealth->integer);
+                return;
+            }
+            if (!Q_stricmp("team", Cmd_Argv(0)) && health && health < sv_minTeamChangeHealth->integer && ( myteam == 1 || myteam == 2 )) { // Don't use "currentteam != 3" because when the game did not started the team is "(null)"
+                
+                SV_SendServerCommand(cl, "print \"You need a minimum of %i percent health to change your team.\n\"", sv_minKillHealth->integer);
+                return;
+            }
             
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}

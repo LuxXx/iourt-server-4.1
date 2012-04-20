@@ -331,6 +331,9 @@ extern	cvar_t	*sv_specChatGlobal;
 
 extern	cvar_t	*sv_tellprefix;
 extern	cvar_t	*sv_sayprefix;
+
+extern	cvar_t	*sv_minTeamChangeHealth;
+extern	cvar_t	*sv_minKillHealth;
 //===========================================================
 
 //
