@@ -138,6 +138,8 @@ cvar_t	*sv_disableDefaultMaps;
 
 cvar_t	*sv_regainStamina;
 
+cvar_t	*sv_MedicStation;
+
 /*
 =============================================================================
 
@@ -1969,6 +1971,65 @@ qboolean SV_CheckPaused( void ) {
 
 /*
 ==================
+SV_CheckLocation
+Returns 1 or -1
+1 = yes player i is in area of xy with the r
+-1 = no player i isnt in area of xy with the r
+==================
+*/
+
+int SV_CheckLocation( float x, float y , float r, int i ) {
+	client_t	*cl;
+	playerState_t *ps;
+    ps = SV_GameClientNum(i);
+    if (ps->origin[0] > x-r &&
+        ps->origin[0] < x+r &&
+        ps->origin[1] > y-r &&
+        ps->origin[1] < y+r
+        ) {
+        return 1;
+    }
+	return -1;
+}
+/*
+==================
+SV_GivePlayerHealth
+i = client id
+h = amount of health
+==================
+*/
+void SV_GivePlayerHealth(int clId, int h) {
+    Cbuf_AddText( va( "gh %i \"+%i\"\n", clId, h) ); // needs qvm mod
+    Cbuf_AddText( va( "scc %i cp \"%s\"",clId ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
+}
+
+/*
+==================
+SV_MedicStation
+==================
+*/
+void SV_MedicStation( char* map, float x, float y, float r, float h ) {
+	client_t	*cl;
+	int i;
+	
+	if (Q_stricmp(sv_mapname->string, map)) { // This MedicStation is not on this map
+		return;
+	}
+    
+	for (i=0 ; i < sv_maxclients->integer ; i++) {
+		cl = &svs.clients[i];
+        if (cl->state == CS_ACTIVE) {
+            if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
+                playerState_t *ps;
+                int phealth = ps->stats[STAT_HEALTH];   
+                SV_GivePlayerHealth(i, h); // Give him health
+            }
+        }
+    }
+}
+
+/*
+==================
 SV_ResetStamina
 ==================
 */
@@ -2174,6 +2235,19 @@ void SV_Frame( int msec ) {
 			}
 		}
 		authClientInx++;
+	}
+    
+    if (sv_MedicStation->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) { // dont run if g_modversion is 4.1
+        // example medic stations
+        // they are hardcoded
+        // FIXME: move cfgs to file?
+        // may cause lags?
+        // FIXME: find a better spot to bind this?
+        SV_MedicStation( "ut4_abbey",50,1500,50,1 );
+        SV_MedicStation( "ut4_sanc",-64,544,50,1 );
+        SV_MedicStation( "ut4_sanc",3936,128,50,1 );
+        SV_MedicStation( "ut4_turnpike",1572,176,50,1 );
+        SV_MedicStation( "ut4_turnpike",-596,-1640,50,1 );
 	}
 }
 

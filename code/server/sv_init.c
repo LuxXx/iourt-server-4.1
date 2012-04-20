@@ -767,6 +767,8 @@ void SV_Init (void) {
     
     sv_regainStamina = Cvar_Get("sv_regainStamina", "0", CVAR_ARCHIVE);
     
+    sv_MedicStation = Cvar_Get ("sv_MedicStation", "0", CVAR_ARCHIVE );
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

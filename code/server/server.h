@@ -390,6 +390,8 @@ extern	cvar_t	*sv_disableDefaultMaps;
 
 extern	cvar_t *sv_regainStamina;
 
+extern	cvar_t	*sv_MedicStation;
+
 //===========================================================
 
 //
