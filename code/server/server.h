@@ -185,6 +185,9 @@ typedef struct client_s {
 	
     qboolean			muted;
 
+    // MaJ -- A place to store what type of mod the user is. 0 for none, otherwise, (mod slot number + 1)
+    int mod_slot;
+
 	char				location[MAX_LOCATION_STRING];
 	char				ip2locChallengeStr[9];	// 8 character hexadecimal string
 } client_t;
@@ -277,6 +280,7 @@ extern	server_t		sv;					// cleared each map
 extern	vm_t			*gvm;				// game virtual machine
 
 #define	MAX_MASTER_SERVERS	5
+#define MAX_MOD_LEVELS 20
 
 extern	cvar_t	*sv_fps;
 extern	cvar_t	*sv_timeout;
@@ -345,6 +349,11 @@ extern	cvar_t	*sv_disableRadioChat;
 
 extern	cvar_t *sv_disableScope;
 
+extern cvar_t *sv_moderatorenable;  // MaJ - 0 to disable all new mod features, 1 to enable them.
+extern cvar_t *sv_moderatorremoteenable;    // MaJ - 1 to allow moderator commands to be issued from out of game.
+extern cvar_t *sv_moderatorpass[MAX_MOD_LEVELS];    // MaJ - Mod passwords for each mod level. (empty string for disabled)
+extern cvar_t *sv_moderatorcommands[MAX_MOD_LEVELS];    // MaJ - Commands each ref is allowed to execute (separated by ,)
+
 //===========================================================
 
 //
@@ -398,6 +407,9 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK );
 void SV_ClientThink (client_t *cl, usercmd_t *cmd);
 
 void SV_WriteDownloadToClient( client_t *cl , msg_t *msg );
+
+int SVC_GetModSlotByPassword(char *password);
+qboolean SV_ModCommandAllowed(char *allowed, char *command);
 
 //
 // sv_ccmds.c

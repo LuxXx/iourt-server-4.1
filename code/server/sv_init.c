@@ -719,6 +719,19 @@ void SV_Init (void) {
 
     sv_disableScope = Cvar_Get("sv_disableScope", "0", CVAR_ARCHIVE);
     
+    int i;
+    sv_moderatorenable = Cvar_Get("sv_moderatorenable", "0", CVAR_ARCHIVE);
+    sv_moderatorremoteenable =
+    Cvar_Get("sv_moderatorremoteenable", "0", CVAR_ARCHIVE);
+    // Init all the moderator cvars in a loop.
+    for (i = 0; i < MAX_MOD_LEVELS; i++)
+    {
+        sv_moderatorpass[i] =
+        Cvar_Get(va("sv_moderatorpass%i", i + 1), "", CVAR_ARCHIVE);
+        sv_moderatorcommands[i] =
+        Cvar_Get(va("sv_moderatorcommands%i", i + 1), "", CVAR_ARCHIVE);
+    }
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

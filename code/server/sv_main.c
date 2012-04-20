@@ -98,6 +98,11 @@ cvar_t	*sv_disableRadioChat;
 
 cvar_t *sv_disableScope; // by delroth
 
+cvar_t *sv_moderatorenable;     // MaJ - 0 to disable all new mod features, 1 to enable them.
+cvar_t *sv_moderatorremoteenable;   // MaJ - 1 to allow moderator commands to be issued from out of game.
+cvar_t *sv_moderatorpass[MAX_MOD_LEVELS];   // MaJ - Mod passwords for each mod level. (empty string for disabled)
+cvar_t *sv_moderatorcommands[MAX_MOD_LEVELS];   // MaJ - Commands each ref is allowed to execute (separated by ,)
+
 /*
 =============================================================================
 
@@ -1060,6 +1065,120 @@ void SVC_AuthorizePlayer(netadr_t from)
 }
 
 /*
+================
+SVC_RemoteMod
+================
+*/
+void SVC_RemoteMod(netadr_t from, msg_t * msg)
+{
+    int slot;
+    char *cmd_ptr;
+    char cmdstr[1024];
+    int i;
+    
+#define SV_REMOTEMOD_OUTPUTBUF_LENGTH (1024 - 16)
+    // A place to hold data before we dump it to the client's console.
+    char sv_remotemod_outputbuf[SV_REMOTEMOD_OUTPUTBUF_LENGTH];
+    
+    // Prevent using mod as an amplifier and make dictionary attacks impractical
+    if (SVC_RateLimitAddress(from, 10, 1000))
+    {
+        Com_DPrintf
+        ("SVC_RemoteMod: rate limit from %s exceeded, dropping request\n",
+         NET_AdrToString(from));
+        return;
+    }
+    
+    if (sv_moderatorremoteenable->integer < 1)
+        return;
+    
+    svs.redirectAddress = from; // This will need to be set for later when we tell the client stuff.
+    
+    slot = SVC_GetModSlotByPassword(Cmd_Argv(1));
+    
+    if (!slot)
+    {
+        Com_Printf("Invalid remote mod password from %s. Password: %s\n",
+                   NET_AdrToString(from), Cmd_Argv(1));
+        
+        // Tell the client what happened.
+        Com_BeginRedirect(sv_remotemod_outputbuf, SV_REMOTEMOD_OUTPUTBUF_LENGTH,
+                          SV_FlushRedirect);
+        Com_Printf("Invalid password.\n");
+        Com_EndRedirect();
+        return;
+    }
+    
+    if (!SV_ModCommandAllowed(sv_moderatorcommands[slot - 1]->string,
+                              Cmd_Argv(2)))
+    {
+        Com_Printf("Invalid permissions for command issued from: %s.\n",
+                   NET_AdrToString(from));
+        Com_Printf("Mod slot %i is not able to execute command: %s\n", slot,
+                   Cmd_Argv(2));
+        
+        // Tell the client what happened.
+        Com_BeginRedirect(sv_remotemod_outputbuf, SV_REMOTEMOD_OUTPUTBUF_LENGTH,
+                          SV_FlushRedirect);
+        Com_Printf("You may only execute commands: %s\n",
+                   sv_moderatorcommands[slot - 1]->string);
+        Com_EndRedirect();
+        return;
+    }
+    
+    // To get this far:
+    //   remote mod must be enabled
+    //   a valid password was supplied
+    //   the mod slot has permissions for the command
+    
+    // To deal with quoting, we should use the full comand, skipping until we find the full command line to exec.
+    cmd_ptr = Cmd_Cmd();
+    
+    while (cmd_ptr[0] == ' ')   // Trim off leading spaces.
+        cmd_ptr++;
+    while (cmd_ptr[0] != '\0' && cmd_ptr[0] != ' ') // Trim off packet command.
+        cmd_ptr++;
+    while (cmd_ptr[0] == ' ')   // Trim off more leading spaces.
+        cmd_ptr++;
+    while (cmd_ptr[0] != '\0' && cmd_ptr[0] != ' ') // Trim off password.
+        cmd_ptr++;
+    while (cmd_ptr[0] == ' ')   // Trim off spaces after the password.
+        cmd_ptr++;
+    
+    // Copy the full command to a new string for trimming and execution.
+    cmdstr[0] = '\0';
+    Q_strcat(cmdstr, sizeof(cmdstr), cmd_ptr);
+    
+    // Make sure nobody tried to sneak in a second command into the args with a command separator
+    for (i = 0; cmdstr[i]; i++)
+    {
+        if (cmdstr[i] == ',' || cmdstr[i] == '\n' || cmdstr[i] == '\r' || (cmdstr[i] == '\\' && cmdstr[i + 1] == '$'))  // no cvar substitution (eg \$rconpassword\)
+        {
+            Com_Printf
+            ("Remote mod command rejected from %s. Reason: Command contains separators.\n",
+             NET_AdrToString(from));
+            // Tell the client we rejected the command.
+            Com_BeginRedirect(sv_remotemod_outputbuf,
+                              SV_REMOTEMOD_OUTPUTBUF_LENGTH, SV_FlushRedirect);
+            Com_Printf
+            ("Remote mod command rejected. Reason: Contains an invalid character.\n");
+            Com_EndRedirect();
+            return;
+        }
+    }
+    
+    // Execute our trimmed string.
+    Com_Printf
+    ("Executing remote command from %s under mod slot %i. Command: %s\n",
+     NET_AdrToString(from), slot, cmdstr);
+    Com_BeginRedirect(sv_remotemod_outputbuf, SV_REMOTEMOD_OUTPUTBUF_LENGTH,
+                      SV_FlushRedirect);
+    Cmd_ExecuteString(cmdstr);
+    Com_EndRedirect();
+    
+}
+
+/*
 =================
 SV_ConnectionlessPacket
 
@@ -1115,7 +1234,9 @@ void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	////////////////////////////////////////////////
 	} else if (!Q_stricmp(c, "playerDBResponse")) {
 		SVC_AuthorizePlayer( from );
-	} else if (!Q_stricmp(c, "disconnect")) {
+	} else if (!Q_stricmp(c, "mod")) {
+        SVC_RemoteMod(from, msg);
+    } else if (!Q_stricmp(c, "disconnect")) {
 		// if a client starts up a local server, we may see some spurious
 		// server disconnect messages when their new server sees our final
 		// sequenced messages to the old client

@@ -1435,6 +1435,253 @@ static void SV_CloseDownload( client_t *cl ) {
 }
 
 /*
+========================
+SVC_GetModSlotByPassword
+Get the mod slot of a given mod password. 0 for failure.
+========================
+*/
+int SVC_GetModSlotByPassword(char *password)
+{
+    int i;
+    
+    if (!password[0])
+        return 0;
+    
+    for (i = 0; i < MAX_MOD_LEVELS; i++)
+    {
+        if (strcmp(password, sv_moderatorpass[i]->string) == 0)
+            return i + 1;
+    }
+    
+    return 0;
+}
+
+/*
+=============
+SV_ModLogin_f
+=============
+*/
+void SV_ModLogin_f(client_t * cl)
+{
+    char *password;
+    int slot;
+    
+    if (sv_moderatorenable->integer < 1)
+    {
+        SV_SendServerCommand(cl,
+                             "print \"Moderator access is currently disabled on this server.\n\"");
+        Com_Printf
+        ("Unsuccessful moderator login from client %i, %s. Reason: Moderators disabled.\n",
+         cl - svs.clients, cl->name);
+        return;
+    }
+    
+    password = Cmd_Argv(1);
+    slot = SVC_GetModSlotByPassword(password);
+    
+    if (slot > 0)
+    {
+        cl->mod_slot = slot;    // Save that this user is logged in as a mod.
+        
+        SV_SendServerCommand(cl,
+                             "print \"You are now logged in as a moderator in slot %i.\n\"",
+                             cl->mod_slot);
+        SV_SendServerCommand(cl,
+                             "print \"You may now execute the following commands:\n\"");
+        SV_SendServerCommand(cl, "print \"%s\n\"",
+                             sv_moderatorcommands[cl->mod_slot - 1]->string);
+        Com_Printf
+        ("Successful moderator login from client %i, %s. Mod slot: %i. Password: %s\n",
+         cl - svs.clients, cl->name, cl->mod_slot, password);
+    }
+    else
+    {
+        SV_SendServerCommand(cl, "print \"^7Invalid moderator password.\n\"");
+        Com_Printf
+        ("Unsuccessful moderator login from client %i, %s. Reason: Invalid password. Password: %s\n",
+         cl - svs.clients, cl->name, password);
+    }
+}
+
+/*
+==============
+SV_ModLogout_f
+==============
+*/
+void SV_ModLogout_f(client_t * cl)
+{
+    if (cl->mod_slot > 0)
+    {
+        cl->mod_slot = 0;
+        
+        SV_SendServerCommand(cl, "print \"You are no longer a moderator.\n\"");
+        Com_Printf("Moderator logout issued from client %i, %s.\n",
+                   cl - svs.clients, cl->name);
+    }
+    else
+        SV_SendServerCommand(cl,
+                             "print \"You are not currently a moderator.\n\"");
+}
+
+/*
+====================
+SV_ModCommandAllowed
+
+This command will tell whether the command given in the second argument is
+contained in a comma AND/OR space seperated list of allowed commands.
+
+For example: "say" is allowed by "kick, mute, say, map"
+but the command "status" is not.
+====================
+*/
+qboolean SV_ModCommandAllowed(char *allowed, char *command)
+{
+    qboolean failed = qfalse;
+    char *tmp = allowed;
+    int cmd_offset = 0;
+    int cmd_len = strlen(command);
+    
+    if (!cmd_len)
+        return qfalse;
+    
+    for (; *tmp; tmp++)
+    {
+        if (*tmp == ',' || *tmp == ' ')
+        {
+            if (!failed && cmd_offset == cmd_len)
+                return qtrue;
+            
+            failed = qfalse;
+            cmd_offset = 0;
+            continue;
+        }
+        
+        if (failed)
+            continue;
+        
+        if (cmd_offset == cmd_len)
+            failed = qtrue;
+        
+        if (command[cmd_offset++] != *tmp)
+            failed = qtrue;
+    }
+    
+    if (!failed && cmd_offset == cmd_len)
+        return qtrue;
+    
+    return qfalse;
+}
+
+/*
+===================
+SV_ModFlushRedirect
+This function serves as a callback for the Com_BeginRedirect function.
+It allows all command data to be printed out to a client's console. where
+the client is defined by their netaddr stored in: svs.redirectAddress.
+===================
+*/
+void SV_ModFlushRedirect(char *outputbuf)
+{
+    NET_OutOfBandPrint(NS_SERVER, svs.redirectAddress, "print\n%s", outputbuf);
+}
+
+/*
+==================
+SV_ModCommand_f
+==================
+*/
+void SV_ModCommand_f(client_t * cl)
+{
+    char *cmd_ptr;
+    char cmdstr[1024];
+    int i;
+    
+#define SV_MOD_OUTPUTBUF_LENGTH (1024 - 16)
+    char sv_mod_outputbuf[SV_MOD_OUTPUTBUF_LENGTH]; // A place to hold data before we dump it to the client's console.
+    
+    if (sv_moderatorenable->integer < 1)
+    {
+        SV_SendServerCommand(cl,
+                             "print \"Moderator access is currently disabled on this server.\n\"");
+        Com_Printf
+        ("Moderator command rejected from client %i, %s. Reason: Moderators disabled.\n",
+         cl - svs.clients, cl->name);
+        return;
+    }
+    
+    if (!cl->mod_slot)
+    {
+        SV_SendServerCommand(cl,
+                             "print \"You are not logged in as a moderator.\n\"");
+        Com_Printf
+        ("Moderator command rejected from client %i, %s. Reason: Not logged in.\n",
+         cl - svs.clients, cl->name);
+        return;
+    }
+    
+    if (Cmd_Argc() < 2)
+    {
+        SV_SendServerCommand(cl, "print \"No moderator command specified.\n\"");
+        SV_SendServerCommand(cl, "print \"Usage: %s <command> [arguments]\n\"",
+                             Cmd_Argv(0));
+        Com_Printf
+        ("Moderator command rejected from client %i, %s. Reason: Empty command string.\n",
+         cl - svs.clients, cl->name);
+        return;
+    }
+    
+    if (!SV_ModCommandAllowed(sv_moderatorcommands[cl->mod_slot - 1]->string,
+                              Cmd_Argv(1)))
+    {
+        Com_Printf
+        ("Moderator command rejected from client %i, %s. Reason: Command not allowed for slot: %i.\n",
+         cl - svs.clients, cl->name, cl->mod_slot);
+        SV_SendServerCommand(cl,
+                             "print \"You are not permitted to execute that command under moderator slot: %i.\n\"",
+                             cl->mod_slot);
+        return;
+    }
+    
+    // To deal with quoting, we should use the full comand, skipping until we find the full command line to exec.
+    cmd_ptr = Cmd_Cmd();
+    
+    while (cmd_ptr[0] == ' ')   // Trim off more leading spaces.
+        cmd_ptr++;
+    while (cmd_ptr[0] != '\0' && cmd_ptr[0] != ' ') // Trim off main command (arg0).
+        cmd_ptr++;
+    while (cmd_ptr[0] == ' ')   // Trim off spaces after arg0.
+        cmd_ptr++;
+    
+    // Copy the full command to a new string for trimming and execution.
+    cmdstr[0] = '\0';
+    Q_strcat(cmdstr, sizeof(cmdstr), cmd_ptr);
+    
+    // Make sure nobody tried to sneak in a second command into the args with a command separator
+    for (i = 0; cmdstr[i]; i++)
+    {
+        if (cmdstr[i] == ',' || cmdstr[i] == '\n' || cmdstr[i] == '\r' || (cmdstr[i] == '\\' && cmdstr[i + 1] == '$'))  // no cvar substitution (eg \$rconpassword\)
+        {
+            Com_Printf
+            ("Moderator command rejected from client %i, %s. Reason: Command contains seperators.\n",
+             cl - svs.clients, cl->name);
+            SV_SendServerCommand(cl,
+                                 "print \"Moderator command contains a disallowed character.\n\"");
+            return;
+        }
+    }
+    
+    Com_Printf("Moderator command accepted from %i, %s. Command: %s\n",
+               cl - svs.clients, cl->name, cmdstr);
+    
+    // Start redirecting all print outputs to the the client that issued this mod command.
+    svs.redirectAddress = cl->netchan.remoteAddress;
+    Com_BeginRedirect(sv_mod_outputbuf, SV_MOD_OUTPUTBUF_LENGTH,
+                      SV_ModFlushRedirect);
+    Cmd_ExecuteString(cmdstr);
+    Com_EndRedirect();
+}
+
+/*
 ==================
 SV_StopDownload_f
 
@@ -2146,6 +2393,9 @@ static ucmd_t ucmds[] = {
 	{"nextdl", SV_NextDownload_f},
 	{"stopdl", SV_StopDownload_f},
 	{"donedl", SV_DoneDownload_f},
+    {"modlogin", SV_ModLogin_f},
+    {"modlogout", SV_ModLogout_f},
+    {"mod", SV_ModCommand_f},
 
 	{NULL, NULL}
 };
