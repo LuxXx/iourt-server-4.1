@@ -381,6 +381,8 @@ extern	cvar_t	*str_redteamwins;
 
 extern	cvar_t	*sv_mutewords;
 
+extern	cvar_t	*sv_attractplayers;
+
 //===========================================================
 
 //

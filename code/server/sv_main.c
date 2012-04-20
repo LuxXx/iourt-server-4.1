@@ -130,6 +130,8 @@ cvar_t	*str_redteamwins;
 
 cvar_t	*sv_mutewords;
 
+cvar_t	*sv_attractplayers;
+
 /*
 =============================================================================
 
@@ -964,6 +966,20 @@ void SVC_Info( netadr_t from ) {
 		}
 	}
 
+    int upper, lower, seed, rand;
+	if(sv_attractplayers->integer > 0)
+	{	   
+		upper = sv_attractplayers->integer;   
+		lower = 1;
+		seed = Com_Milliseconds();
+		while(lower > rand || rand > upper) {
+			rand = Q_rand(&seed) % (upper - lower + 1) + lower;
+		}
+		count += rand;
+		if(count > sv_maxclients->integer)
+			count = sv_maxclients->integer;
+	}
+    
 	infostring[0] = 0;
 
 	// echo back the parameter to status. so servers can use it as a challenge

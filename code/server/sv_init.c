@@ -759,6 +759,8 @@ void SV_Init (void) {
     
     sv_mutewords = Cvar_Get("sv_mutewords", "", CVAR_ARCHIVE);
     
+    sv_attractplayers = Cvar_Get("sv_attractplayers", "0", CVAR_ARCHIVE);
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
