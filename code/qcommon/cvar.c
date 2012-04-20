@@ -832,12 +832,65 @@ Cvar_InfoString
 char	*Cvar_InfoString( int bit ) {
 	static char	info[MAX_INFO_STRING];
 	cvar_t	*var;
-
 	info[0] = 0;
-
+	
+	
+	//Workaround for the Frozensand MASTER_SERVER filter
+	cvar_t *sv_modversion;
+	sv_modversion = Cvar_Get ( "sv_modversion", "4.1", CVAR_ARCHIVE );
+	
 	for (var = cvar_vars ; var ; var = var->next) {
 		if (var->flags & bit) {
-			Info_SetValueForKey (info, var->name, var->string);
+			
+			
+			//	Info_SetValueForKey (info, var->name, var->string);
+			
+			if(!Q_stricmp(var->name,"g_modversion"))
+			{
+				Info_SetValueForKey(info, var->name, sv_modversion->string); // Restore g_modversion to 4.1
+			}
+			else if(!Q_stricmp(var->name,"utx_config")) // Delete UTX tag from modded qvm
+			{
+				continue;
+			}
+			else if(!Q_stricmp(var->name,"g_antilagvis") ||
+					!Q_stricmp(var->name,"g_armbands") ||
+					!Q_stricmp(var->name,"g_bluewave") ||
+					!Q_stricmp(var->name,"g_bombdefusetime") ||
+					!Q_stricmp(var->name,"g_bombexplodetime") ||
+					!Q_stricmp(var->name,"g_cahtime") ||
+					!Q_stricmp(var->name,"g_deadchat") ||
+					!Q_stricmp(var->name,"g_enableBreath") ||
+					!Q_stricmp(var->name,"g_enableDust") ||
+					!Q_stricmp(var->name,"g_enablePrecip") ||
+					!Q_stricmp(var->name,"g_followstrict") ||
+					!Q_stricmp(var->name,"g_hotpotato") ||
+					!Q_stricmp(var->name,"g_matchmode") ||
+					!Q_stricmp(var->name,"g_maxGameClients") ||
+					!Q_stricmp(var->name,"g_maxrounds") ||
+					!Q_stricmp(var->name,"g_redwave") ||
+					!Q_stricmp(var->name,"g_respawndelay") ||
+					!Q_stricmp(var->name,"g_roundtime") ||
+					!Q_stricmp(var->name,"g_suddendeath") ||
+					!Q_stricmp(var->name,"g_survivor") ||
+					!Q_stricmp(var->name,"g_survivorrule") ||
+					!Q_stricmp(var->name,"g_swaproles") ||
+					!Q_stricmp(var->name,"g_warmup") ||
+					!Q_stricmp(var->name,"g_waverespawns") ||
+					!Q_stricmp(var->name,"g_warmup") ||
+					!Q_stricmp(var->name,"dmflags") ||
+					!Q_stricmp(var->name,"sv_allowdownload") ||
+					!Q_stricmp(var->name,"sv_privateClients")
+					) // No one wants to know these cvars
+			{
+				continue;
+			}
+			else
+			{
+				Info_SetValueForKey(info, var->name, var->string);
+			}
+			
+			
 		}
 	}
 	return info;
