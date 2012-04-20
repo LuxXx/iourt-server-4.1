@@ -2292,7 +2292,9 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 					Cmd_TokenizeString("team blue");
 				}
 			}
-
+            
+            
+            
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}
