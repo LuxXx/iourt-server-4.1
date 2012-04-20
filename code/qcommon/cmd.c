@@ -260,6 +260,21 @@ void Cmd_Exec_f( void ) {
 	FS_FreeFile (f);
 }
 
+/*
+==========
+Cmd_Return_f
+==========
+*/
+void Cmd_Return_f(void)
+{
+    if (Cmd_Argc() != 1)
+    {
+        Com_Printf("stops iourt to execute any cfg file");
+        return;
+    }
+    
+    Cbuf_Init();
+}
 
 /*
 ===============
@@ -793,7 +808,9 @@ Cmd_Init
 ============
 */
 void Cmd_Init (void) {
-	Cmd_AddCommand ("cmdlist",Cmd_List_f);
+	Cmd_AddCommand ("return",Cmd_Return_f);
+    Cmd_AddCommand ("stop",Cmd_Return_f);
+    Cmd_AddCommand ("cmdlist",Cmd_List_f);
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
 	Cmd_AddCommand ("vstr",Cmd_Vstr_f);
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
