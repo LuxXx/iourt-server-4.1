@@ -1588,10 +1588,6 @@ void SVC_RemoteMod(netadr_t from, msg_t * msg)
     char sv_remotemod_outputbuf[SV_REMOTEMOD_OUTPUTBUF_LENGTH];
     
     // Prevent using mod as an amplifier and make dictionary attacks impractical
-    /*
-    // LuxXx: I don't want to do more copy 'n' paste crap. I'm already tired.
-    // One day i'll add SVC_RateLimitAddress
-    // FIXME: Add SVC_RateLimitAddress
     if (SVC_RateLimitAddress(from, 10, 1000))
     {
         Com_DPrintf
@@ -1599,7 +1595,7 @@ void SVC_RemoteMod(netadr_t from, msg_t * msg)
          NET_AdrToString(from));
         return;
     }
-    */
+    
     if (sv_moderatorremoteenable->integer < 1)
         return;
     
