@@ -2592,6 +2592,49 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 return;
             }
 
+            if (sv_disableDefaultMaps->integer > 0 && !Q_stricmp("callvote",Cmd_Argv(0)) && (!Q_stricmp("nextmap",Cmd_Argv(1)) || !Q_stricmp("map",Cmd_Argv(1)))
+                && (!Q_stricmp("ut4_abbey", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_abbeyctf", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_algiers", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_ambush", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_austria", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_casa", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_crossing", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_dressingroom", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_eagle", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_elgin", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_firingrange", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_harbortown", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_kingdom", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_mandolin", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_maya", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_oildepot", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_prague", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_ramelle", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_riyadh", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_sanc", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_snoppis", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_suburbs", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_subway", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_swim", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_thingley", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_tombs", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_toxic", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_tunis", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_turnpike", Cmd_Argv(2))
+                    || !Q_stricmp("ut4_uptown", Cmd_Argv(2))
+                    )
+                
+                
+                
+                )
+            {
+                
+                
+                SV_SendServerCommand(cl, "cp \"^7This map is currently disabled\"");
+                return;
+            }
+
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}

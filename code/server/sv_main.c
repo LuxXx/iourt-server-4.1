@@ -134,6 +134,8 @@ cvar_t	*sv_attractplayers;
 
 cvar_t	*sv_badRconMessage;
 
+cvar_t	*sv_disableDefaultMaps;
+
 /*
 =============================================================================
 
