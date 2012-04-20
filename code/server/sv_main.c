@@ -450,7 +450,7 @@ int mbw_BadWordMute(char* msg) {
 	cut = strtok (string,",");
     while (cut != NULL)
     {
-        if (i = lux_CheckBadWord(cut,msg) != -1) {
+        if (i = mbw_CheckBadWord(cut,msg) != -1) {
             return 1;
         }
         cut = strtok (NULL, ",");
