@@ -1107,6 +1107,37 @@ static void SV_Spoof_f(void)
     VM_Call(gvm, GAME_CLIENT_COMMAND, cl - svs.clients);
 }
 
+/*
+==================
+SV_CrashPlayer_f
+==================
+*/
+static void SV_CrashPlayer_f(void) {
+	client_t	*cl;
+	
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+	
+	if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0) {
+		Com_Printf("Usage: crash <player name>\nPlayer may be 'all'\n");
+		return;
+	}
+    
+	cl = SV_GetPlayerByHandle();
+	
+	if (!cl) {
+		if (!Q_stricmp(Cmd_Argv(1), "all")) {
+			SV_SendServerCommand(cl, "cs 512"); // use 512 to crash?
+		}
+		return;
+	}
+    
+	SV_SendServerCommand(cl, "cs 512"); // use 512 to crash?
+}
+
 //===========================================================
 
 /*
@@ -1130,6 +1161,8 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("reasonkick", SV_Kick_f);
     Cmd_AddCommand ("spoof", SV_Spoof_f);
 	Cmd_AddCommand ("spf", SV_Spoof_f);
+    Cmd_AddCommand ("crashplayer", SV_CrashPlayer_f);
+	Cmd_AddCommand ("crash", SV_CrashPlayer_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
