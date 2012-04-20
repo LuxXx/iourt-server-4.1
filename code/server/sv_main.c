@@ -96,6 +96,8 @@ cvar_t	*sv_disableWeapDrop;
 cvar_t	*sv_disableItemDrop;
 cvar_t	*sv_disableRadioChat;
 
+cvar_t *sv_disableScope; // by delroth
+
 /*
 =============================================================================
 

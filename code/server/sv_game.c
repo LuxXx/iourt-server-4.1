@@ -283,6 +283,10 @@ void SV_GetUsercmd( int clientNum, usercmd_t *cmd ) {
 		Com_Error( ERR_DROP, "SV_GetUsercmd: bad clientNum:%i", clientNum );
 	}
 	*cmd = svs.clients[clientNum].lastUsercmd;
+    
+    if (sv_disableScope->integer > 0) {
+        cmd->buttons &= ~0x6800;
+    }
 }
 
 //==============================================

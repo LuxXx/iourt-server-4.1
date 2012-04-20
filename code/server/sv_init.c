@@ -717,6 +717,8 @@ void SV_Init (void) {
     sv_disableItemDrop = Cvar_Get("sv_disableItemDrop", "0", CVAR_ARCHIVE);
     sv_disableRadioChat = Cvar_Get("sv_disableRadioChat", "0", CVAR_ARCHIVE);
 
+    sv_disableScope = Cvar_Get("sv_disableScope", "0", CVAR_ARCHIVE);
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

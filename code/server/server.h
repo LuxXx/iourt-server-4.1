@@ -343,6 +343,8 @@ extern	cvar_t	*sv_disableWeapDrop;
 extern	cvar_t	*sv_disableItemDrop;
 extern	cvar_t	*sv_disableRadioChat;
 
+extern	cvar_t *sv_disableScope;
+
 //===========================================================
 
 //
