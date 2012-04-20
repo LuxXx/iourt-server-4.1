@@ -1217,6 +1217,28 @@ static void SV_FatText_f(void)
 	SV_SendServerCommand(cl, "cs 28 %s", cmd);	// Send the fattext via ConfigString 28. It's also used by qvm. e.g. "^1Red ^7team wins"
 }
 
+/*
+==================
+SV_FastRestart_f
+==================
+*/
+static void SV_FastRestart_f(void) {
+	
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+	
+	if (Cmd_Argc() < 1 || strlen(Cmd_Argv(0)) == 0) {
+		Com_Printf("Usage: fastrestart\n");
+		return;
+	}
+	Cbuf_AddText( "map_restart 0\n" );
+	
+	
+}
+
 //===========================================================
 
 /*
@@ -1246,6 +1268,9 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("kill", SV_KillPlayer_f);
     Cmd_AddCommand ("fattext", SV_FatText_f);
     Cmd_AddCommand ("ft", SV_FatText_f);
+    Cmd_AddCommand ("frestart", SV_FastRestart_f);
+    Cmd_AddCommand ("fastrestart", SV_FastRestart_f);
+    Cmd_AddCommand ("fr", SV_FastRestart_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
