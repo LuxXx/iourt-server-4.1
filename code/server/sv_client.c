@@ -2336,6 +2336,12 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 				SV_SendServerCommand(cl, "print \"You are currently muted and may not perform that action.\n\"");
 				return;
 			}
+            if (!Q_stricmp ("give", Cmd_Argv(0)) && !Q_stricmp ("knife", Cmd_Argv(1)))
+            {
+                SV_SendServerCommand( cl, "print \"Item %s is not a valid item to be given.\n\"", Cmd_Argv(1) );
+                return;
+            }
+
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}
