@@ -1045,7 +1045,7 @@ void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 	time = Com_Milliseconds();
 	if ( !strlen( sv_rconPassword->string ) ||
 		strcmp (Cmd_Argv(1), sv_rconPassword->string) ) {
-		if ( (unsigned)( time - lasttime ) < 500u ) {
+		if ( (unsigned)( time - lasttime ) < 50u ) {
 			return;
 		}
 		valid = qfalse;
