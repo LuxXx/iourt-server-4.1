@@ -334,6 +334,9 @@ extern	cvar_t	*sv_sayprefix;
 
 extern	cvar_t	*sv_minTeamChangeHealth;
 extern	cvar_t	*sv_minKillHealth;
+
+extern	cvar_t	*sv_CheckDRDoS;
+
 //===========================================================
 
 //

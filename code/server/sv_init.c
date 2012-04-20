@@ -709,6 +709,8 @@ void SV_Init (void) {
 
     sv_minTeamChangeHealth = Cvar_Get("sv_minTeamChangeHealth", "0", CVAR_ARCHIVE);
     sv_minKillHealth = Cvar_Get("sv_minKillHealth", "0", CVAR_ARCHIVE);
+    
+	sv_CheckDRDoS = Cvar_Get ("sv_CheckDRDoS", "1", CVAR_ARCHIVE );
 
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();

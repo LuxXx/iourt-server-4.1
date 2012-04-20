@@ -90,6 +90,8 @@ cvar_t	*sv_sayprefix;
 cvar_t	*sv_minTeamChangeHealth;
 cvar_t	*sv_minKillHealth;
 
+cvar_t	*sv_CheckDRDoS;
+
 /*
 =============================================================================
 
@@ -1069,10 +1071,14 @@ void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	c = Cmd_Argv(0);
 
 	if (!Q_stricmp(c, "getstatus")) {
-		if (SV_CheckDRDoS(from)) { return; }
+		if (sv_CheckDRDoS->integer > 0) {
+            if (SV_CheckDRDoS(from)) { return; }
+        }
 		SVC_Status( from  );
   } else if (!Q_stricmp(c, "getinfo")) {
-		if (SV_CheckDRDoS(from)) { return; }
+        if (sv_CheckDRDoS->integer > 0) {
+            if (SV_CheckDRDoS(from)) { return; }
+        }
 		SVC_Info( from );
 	} else if (!Q_stricmp(c, "getchallenge")) {
 		SV_GetChallenge( from );
