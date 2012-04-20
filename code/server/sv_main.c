@@ -1056,7 +1056,7 @@ void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 			Com_Printf("Bad rcon from %s:\n%s\n", NET_AdrToString(from), Cmd_Argv(2));
 		}
 	} else {
-		if (!Sys_IsLANAddress(from) && (unsigned) (time - lasttime) < 100u) {
+		if (!Sys_IsLANAddress(from) && (unsigned) (time - lasttime) < 25u) {
 			return;
 		}
 		valid = qtrue;
