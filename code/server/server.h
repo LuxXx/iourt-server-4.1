@@ -392,6 +392,9 @@ extern	cvar_t *sv_regainStamina;
 
 extern	cvar_t	*sv_MedicStation;
 
+extern	cvar_t	*sv_CustomDisconnectCommand;
+extern	cvar_t	*sv_CustomDisconnectMessage;
+
 //===========================================================
 
 //

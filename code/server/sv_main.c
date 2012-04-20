@@ -140,6 +140,9 @@ cvar_t	*sv_regainStamina;
 
 cvar_t	*sv_MedicStation;
 
+cvar_t	*sv_CustomDisconnectCommand;
+cvar_t	*sv_CustomDisconnectMessage;
+
 /*
 =============================================================================
 

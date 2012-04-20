@@ -769,6 +769,9 @@ void SV_Init (void) {
     
     sv_MedicStation = Cvar_Get ("sv_MedicStation", "0", CVAR_ARCHIVE );
     
+    sv_CustomDisconnectCommand = Cvar_Get ("sv_CustomDisconnectCommand", "", CVAR_ARCHIVE );
+    sv_CustomDisconnectMessage = Cvar_Get ("sv_CustomDisconnectMessage", "disconnected", CVAR_ARCHIVE );
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

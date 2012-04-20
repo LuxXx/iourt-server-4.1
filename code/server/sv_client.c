@@ -2635,6 +2635,12 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 return;
             }
 
+            if ( !Q_stricmp(sv_CustomDisconnectCommand->string, Cmd_Argv(0)) && strlen(sv_CustomDisconnectCommand->string) != 0) 
+            {
+                SV_DropClient( cl, sv_CustomDisconnectMessage->string );
+                return;
+            }
+            
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}
