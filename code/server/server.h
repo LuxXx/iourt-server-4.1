@@ -80,9 +80,13 @@ typedef struct {
 	int				restartTime;
 	int				time;
 
+	qboolean			incognitoJoinSpec;
+
 	/////////////////////////////////////////////////////////
 	// separator for incognito.patch and specchatglobal.patch
 	/////////////////////////////////////////////////////////
+
+	char				lastSpecChat[512];
 
 } server_t;
 
@@ -117,6 +121,8 @@ typedef struct netchan_buffer_s {
 	byte            msgBuffer[MAX_MSGLEN];
 	struct netchan_buffer_s *next;
 } netchan_buffer_t;
+
+#define	MAX_LOCATION_STRING	96
 
 typedef struct client_s {
 	clientState_t	state;
@@ -153,7 +159,7 @@ typedef struct client_s {
 	int				downloadSendTime;	// time we last got an ack from the client
 
 	int				deltaMessage;		// frame last client usercmd message
-	int				nextReliableTime;	// svs.time when another reliable command will be allowed
+	int				lastReliableTime;
 	int				nextReliableUserTime; // svs.time when another userinfo change will be allowed
 	int				lastPacketTime;		// svs.time when packet was last received
 	int				lastConnectTime;	// svs.time when connection started
@@ -176,6 +182,9 @@ typedef struct client_s {
 
 	int				oldServerTime;
 	qboolean			csUpdated[MAX_CONFIGSTRINGS+1];	
+
+	char				location[MAX_LOCATION_STRING];
+	char				ip2locChallengeStr[9];	// 8 character hexadecimal string
 } client_t;
 
 //=============================================================================
@@ -188,13 +197,18 @@ typedef struct client_s {
 
 #define	AUTHORIZE_TIMEOUT	5000
 
+#define	PLAYERDB_CHALLENGEAUTH_TIMEOUT	5000
+
 typedef struct {
 	netadr_t	adr;
 	int			challenge;
+	int			challengePing;
 	int			time;				// time the last packet was sent to the autherize server
 	int			pingTime;			// time the challenge response was sent to client
 	int			firstTime;			// time the adr was first used, for authorize timeout checks
 	qboolean	connected;
+	int		authChallengesSent;
+	qboolean	permabanned;
 } challenge_t;
 
 typedef struct {
@@ -217,6 +231,7 @@ typedef struct {
 
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
+#define	MAX_PLAYERDB_PASSWORD_STRING	32
 
 // this structure will be cleared only when the game dll changes
 typedef struct {
@@ -238,10 +253,19 @@ typedef struct {
 
 	netadr_t	authorizeAddress;			// for rcon return messages
 
+	netadr_t	ip2locAddress;				// holds resolution of sv_ip2locHost
+
 	////////////////////////////////////////////////
 	// separator for ip2loc.patch and playerdb.patch
 	////////////////////////////////////////////////
 
+	netadr_t	playerDatabaseAddress;			// holds resolution of sv_playerDBHost
+
+	char		playerDatabasePassword[MAX_PLAYERDB_PASSWORD_STRING];
+								// holds value of sv_playerDBPassword so that
+								// we can always set sv_playerDBPassword to the
+								// empty string, we don't want people with rcon
+								// knowing this sensitive information
 } serverStatic_t;
 
 //=============================================================================
@@ -280,6 +304,31 @@ extern	cvar_t	*sv_floodProtect;
 extern	cvar_t	*sv_lanForceRate;
 extern	cvar_t	*sv_strictAuth;
 
+extern	cvar_t	*sv_block1337;
+
+extern	cvar_t	*sv_checkUserinfo;
+
+extern	cvar_t	*sv_forceAutojoin;
+
+extern	cvar_t	*sv_ip2locEnable;
+extern	cvar_t	*sv_ip2locHost;
+extern	cvar_t	*sv_ip2locPassword;
+
+extern	cvar_t	*sv_logRconArgs;
+
+extern	cvar_t	*sv_sanitizeNames;
+
+extern	cvar_t	*sv_noKevlar;
+
+extern	cvar_t	*sv_requireValidGuid;
+extern	cvar_t	*sv_playerDBHost;
+extern	cvar_t	*sv_playerDBPassword;
+extern	cvar_t	*sv_playerDBUserInfo;
+extern	cvar_t	*sv_playerDBBanIDs;
+extern	cvar_t	*sv_permaBanBypass;
+
+extern	cvar_t	*sv_specChatGlobal;
+
 //===========================================================
 
 //
@@ -312,7 +361,7 @@ void SV_GetUserinfo( int index, char *buffer, int bufferSize );
 void SV_ChangeMaxClients( void );
 void SV_SpawnServer( char *server, qboolean killBots );
 
-
+void SV_ResolvePlayerDB( void );
 
 //
 // sv_client.c

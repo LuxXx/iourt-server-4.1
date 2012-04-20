@@ -758,10 +758,183 @@ static void SV_KillServer_f( void ) {
 	SV_Shutdown( "killserver" );
 }
 
+/*
+==================
+SV_ForceCvar_f_helper
+
+Called internally by SV_ForceCvar_f.
+==================
+*/
+static void SV_ForceCvar_f_helper( client_t *cl ) {
+	int		oldInfoLen;
+	int		newInfoLen;
+	qboolean	touchedUserinfo = qfalse;
+
+	// Who knows what would happen if we called the VM with a GAME_CLIENT_USERINFO_CHANGED
+	// when this client wasn't connected.
+	if (cl->state < CS_CONNECTED) {
+		return;
+	}
+
+	// First remove all keys; there might exist more than one in the userinfo.
+	oldInfoLen = strlen(cl->userinfo);
+	while (qtrue) {
+		Info_RemoveKey(cl->userinfo, Cmd_Argv(2));
+		newInfoLen = strlen(cl->userinfo);
+		if (oldInfoLen == newInfoLen) { break; } // userinfo wasn't modified.
+		oldInfoLen = newInfoLen;
+		touchedUserinfo = qtrue;
+	}
+
+	if (strlen(Cmd_Argv(3)) > 0) {
+		if (strlen(Cmd_Argv(2)) + strlen(Cmd_Argv(3)) + 2 + newInfoLen >= MAX_INFO_STRING) {
+			SV_DropClient(cl, "userinfo string length exceeded");
+			return;
+		}
+		Info_SetValueForKey(cl->userinfo, Cmd_Argv(2), Cmd_Argv(3));
+		touchedUserinfo = qtrue;
+	}
+
+	if (touchedUserinfo) {
+		SV_UserinfoChanged(cl);
+		VM_Call(gvm, GAME_CLIENT_USERINFO_CHANGED, cl - svs.clients);
+	}
+}
+
+/*
+==================
+SV_ForceCvar_f
+
+Set a cvar for a user.
+==================
+*/
+static void SV_ForceCvar_f(void) {
+	client_t	*cl;
+	int		i;
+
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+
+	if (Cmd_Argc() != 4 || strlen(Cmd_Argv(2)) == 0) {
+		Com_Printf("Usage: forcecvar <player name> <cvar name> <cvar value>\nPlayer may be 'allbots'\n");
+		return;
+	}
+
+	cl = SV_GetPlayerByHandle();
+	if (!cl) {
+		if (!Q_stricmp(Cmd_Argv(1), "allbots")) {
+			for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+				if (!cl->state) {
+					continue;
+				}
+				if(cl->netchan.remoteAddress.type != NA_BOT) {
+					continue;
+				}
+				SV_ForceCvar_f_helper(cl);
+			}
+		}
+		return;
+	}
+
+	SV_ForceCvar_f_helper(cl);
+}
 
 ////////////////////////////////////////////////////
 // separator for forcecvar.patch and incognito.patch
 ////////////////////////////////////////////////////
+
+/*
+==================
+SV_SendClientCommand_f
+
+Send a reliable command to a specific client.
+==================
+*/
+static void SV_SendClientCommand_f(void) {
+	client_t	*cl;
+	char		*cmd;
+
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+
+	if (Cmd_Argc() < 3 || strlen(Cmd_Argv(2)) == 0) {
+		Com_Printf("Usage: sendclientcommand <player name> <command>\nPlayer may be 'all' or 'allbots'\n");
+		return;
+	}
+
+	cl = SV_GetPlayerByHandle();
+	cmd = Cmd_ArgsFromRaw(2);
+
+	if (!cl) {
+		if (!Q_stricmp(Cmd_Argv(1), "all")) {
+			SV_SendServerCommand(NULL, "%s", cmd);
+		}
+		return;
+	}
+
+	SV_SendServerCommand(cl, "%s", cmd);
+}
+
+
+/*
+==================
+SV_Incognito_f
+
+Pretend that you disconnect, but really go to spec.
+==================
+*/
+static void SV_Incognito_f(void) {
+	client_t	*cl;
+	int		i;
+	char		cmd[64];
+
+	// Make sure server is running.
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+
+	if (!in_redirect) {
+		Com_Printf("The incognito command can only be run through rcon\n");
+		return;
+	}
+
+	if (Cmd_Argc() != 1) {
+		Com_Printf("No arguments expected for incognito command\n");
+		return;
+	}
+
+	// Find the person connected to server who issued the incognito command.
+	for (i = 0, cl = svs.clients;; i++, cl++) {
+		if (i == sv_maxclients->integer) {
+			cl = NULL;
+			break;
+		}
+		if (cl->state >= CS_ACTIVE && NET_CompareAdr(cl->netchan.remoteAddress, svs.redirectAddress)) {
+			break; // found
+		}
+	}
+
+	if (cl != NULL) {
+		sv.incognitoJoinSpec = qtrue;
+		Com_sprintf(cmd, sizeof(cmd), "forceteam %i spectator\n", i);
+		Cmd_ExecuteString(cmd);
+		sv.incognitoJoinSpec = qfalse;
+		SV_SendServerCommand(NULL, "print \"%s" S_COLOR_WHITE " disconnected\n\"", cl->name); // color OK
+		Com_sprintf(cmd, sizeof(cmd), "sendclientcommand all cs %i \"\"\n", 548 + i);
+		Cmd_ExecuteString(cmd);
+	}
+	else {
+		Com_Printf("Must be connected to server for incognito to work\n");
+	}
+
+}
 
 //===========================================================
 
@@ -780,8 +953,10 @@ void SV_AddOperatorCommands( void ) {
 
 	Cmd_AddCommand ("heartbeat", SV_Heartbeat_f);
 	Cmd_AddCommand ("kick", SV_Kick_f);
+	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
+	*/
 	Cmd_AddCommand ("clientkick", SV_KickNum_f);
 	Cmd_AddCommand ("status", SV_Status_f);
 	Cmd_AddCommand ("serverinfo", SV_Serverinfo_f);
@@ -801,10 +976,12 @@ void SV_AddOperatorCommands( void ) {
 		Cmd_AddCommand ("tell", SV_ConTell_f);
 	}
 
+	Cmd_AddCommand("forcecvar", SV_ForceCvar_f);
 	////////////////////////////////////////////////////
 	// separator for forcecvar.patch and incognito.patch
 	////////////////////////////////////////////////////
-
+	Cmd_AddCommand ("sendclientcommand", SV_SendClientCommand_f);
+	Cmd_AddCommand ("incognito", SV_Incognito_f);
 }
 
 /*

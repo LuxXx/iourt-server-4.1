@@ -54,6 +54,36 @@ cvar_t	*sv_floodProtect;
 cvar_t	*sv_lanForceRate; // dedicated 1 (LAN) server forces local client rates to 99999 (bug #491)
 cvar_t	*sv_strictAuth;
 
+cvar_t	*sv_block1337;			// whether to block clients with qport 1337,
+					// default 0 don't block
+
+cvar_t	*sv_checkUserinfo;
+
+cvar_t	*sv_forceAutojoin;		// whether to translate the "team red" and "team blue"
+					// client commands to "team free" (which will autojoin),
+					// default 0 don't translate
+
+cvar_t	*sv_ip2locEnable;		// whether to enable messages showing where players connect from, default 0, disable
+cvar_t	*sv_ip2locHost;			// host and port of the ip2loc service, e.g. "localhost:10020"
+cvar_t	*sv_ip2locPassword;		// password for the ip2loc service
+
+cvar_t	*sv_logRconArgs;		// whether to log rcon command args; 0 don't log, default
+
+cvar_t	*sv_sanitizeNames;		// whether to sanitize names in userinfos, making them just like in UrT
+
+cvar_t	*sv_noKevlar;
+
+cvar_t	*sv_requireValidGuid;	// whether client userinfo must contain a cl_guid, string of length 32 consisting
+				// of characters '0' through '9' and 'A' through 'F', default 0 don't require
+cvar_t	*sv_playerDBHost;	// hostname or IP address for the player database, e.g. "localhost:10030"
+cvar_t	*sv_playerDBPassword;	// password for the player database ban server system
+cvar_t	*sv_playerDBUserInfo;	// whether to send client userinfo strings to player database, default 0 don't send
+cvar_t	*sv_playerDBBanIDs;	// comma separated list of banlists to check with player database
+cvar_t	*sv_permaBanBypass;	// password for avoiding permaban system, client should use "/setu permabanbypass <password>"
+
+cvar_t	*sv_specChatGlobal;		// whether to broadcast spec chat globally
+					// default 0 don't broadcast
+
 /*
 =============================================================================
 
@@ -188,9 +218,26 @@ void QDECL SV_SendServerCommand(client_t *cl, const char *fmt, ...) {
 		return;
 	}
 
+	if (sv.incognitoJoinSpec &&
+			cl == NULL &&
+			(!Q_strncmp((char *) message, "print \"", 7)) &&
+			msglen >= 27 + 7 &&
+			!strcmp("^7 joined the spectators.\n\"", ((char *) message) + msglen - 27)) {
+		return;
+	}
+
 	/////////////////////////////////////////////////////////
 	// separator for incognito.patch and specchatglobal.patch
 	/////////////////////////////////////////////////////////
+
+	if (sv_specChatGlobal->integer > 0 && cl != NULL &&
+			!Q_strncmp((char *) message, "chat \"^7(SPEC) ", 15)) {
+		if (!Q_strncmp((char *) message, sv.lastSpecChat, sizeof(sv.lastSpecChat) - 1)) {
+			return;
+		}
+		Q_strncpyz(sv.lastSpecChat, (char *) message, sizeof(sv.lastSpecChat));
+		cl = NULL;
+	}
 
 	if ( cl != NULL ) {
 		SV_AddServerCommand( cl, (char *)message );
@@ -467,25 +514,18 @@ void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 			return;
 		}
 		valid = qfalse;
-		Com_Printf ("Bad rcon from %s:\n%s\n", NET_AdrToString (from), Cmd_Argv(2) );
+		if (sv_logRconArgs->integer > 0) {
+			Com_Printf("Bad rcon from %s\n", NET_AdrToString(from));
+		}
+		else {
+			Com_Printf("Bad rcon from %s:\n%s\n", NET_AdrToString(from), Cmd_Argv(2));
+		}
 	} else {
 		if (!Sys_IsLANAddress(from) && (unsigned) (time - lasttime) < 100u) {
 			return;
 		}
 		valid = qtrue;
-		Com_Printf ("Rcon from %s:\n%s\n", NET_AdrToString (from), Cmd_Argv(2) );
-	}
-	lasttime = time;
 
-	// start redirecting all print outputs to the packet
-	svs.redirectAddress = from;
-	Com_BeginRedirect (sv_outputbuf, SV_OUTPUTBUF_LENGTH, SV_FlushRedirect);
-
-	if ( !strlen( sv_rconPassword->string ) ) {
-		Com_Printf ("No rconpassword set on the server.\n");
-	} else if ( !valid ) {
-		Com_Printf ("Bad rconpassword.\n");
-	} else {
 		remaining[0] = 0;
 		
 		// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
@@ -502,9 +542,26 @@ void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 			cmd_aux++;
 		
 		Q_strcat( remaining, sizeof(remaining), cmd_aux);
-		
-		Cmd_ExecuteString (remaining);
 
+		if (sv_logRconArgs->integer > 0) {
+			Com_Printf("Rcon from %s: %s\n", NET_AdrToString(from), remaining);
+		}
+		else {
+			Com_Printf("Rcon from %s:\n%s\n", NET_AdrToString(from), Cmd_Argv(2));
+		}
+	}
+	lasttime = time;
+
+	// start redirecting all print outputs to the packet
+	svs.redirectAddress = from;
+	Com_BeginRedirect (sv_outputbuf, SV_OUTPUTBUF_LENGTH, SV_FlushRedirect);
+
+	if ( !strlen( sv_rconPassword->string ) ) {
+		Com_Printf ("No rconpassword set on the server.\n");
+	} else if ( !valid ) {
+		Com_Printf ("Bad rconpassword.\n");
+	} else {		
+		Cmd_ExecuteString (remaining);
 	}
 
 	Com_EndRedirect ();
@@ -644,6 +701,342 @@ qboolean SV_CheckDRDoS(netadr_t from)
 }
 
 /*
+===============
+SVC_HandleIP2Loc
+
+Deal with packets from the ip2loc lookup service.  Packets should be of the form:
+\xFF\xFF\xFF\xFFip2locResponse "getLocationForIP" "<IP address>" "<country code>" "<country>" "<region>" "<city>" "<latitude>" "<longitude>"
+===============
+*/
+void SVC_HandleIP2Loc( netadr_t from ) {
+	netadr_t	clientadr;
+	int		i;
+	client_t	*cl;
+	qboolean	countryNeedsRegion = qfalse;
+	qboolean	citySpecified = qfalse;
+	qboolean	regionSpecified = qfalse;
+	qboolean	countrySpecified = qfalse;
+	static	qboolean	charMap[256];
+	static	qboolean	charMapInitialized = qfalse;
+	char		*ch;
+
+	if (!(sv_ip2locHost->string[0] && sv_ip2locEnable->integer > 0)) {
+		Com_DPrintf("ip2locResponse packet received from %s unexpectedly\n",
+			NET_AdrToString(from));
+		return;
+	}
+	// NET_CompareAdr() will compare the .type of the address, which will be NA_BAD for svs.ip2locAddress if resolution failed.
+	if (!NET_CompareAdr(from, svs.ip2locAddress)) {
+		Com_DPrintf("ip2locResponse packet received from invalid ip2loc server: %s\n",
+			NET_AdrToString(from));
+		return;
+	}
+	const char *command = "getLocationForIP:xxxxxxxx";
+	if (strlen(command) != strlen(Cmd_Argv(1)) ||
+			Q_strncmp(command, Cmd_Argv(1), 17)) { // Check up to and including the ':'.
+		Com_DPrintf("We only understand \"%s\" on ip2locResponse packets\n", command);
+		return;
+	}
+	Com_DPrintf("Received ip2locResponse packet for client address %s\n", Cmd_Argv(2));
+	// Make sure this is an IP address (so that DNS lookups won't happen below).
+	if (!NET_IsIP(Cmd_Argv(2))) { // Unfortunately does not currently handle IPv6.
+		Com_DPrintf("Invalid IP address in ip2locResponse packet: %s\n", Cmd_Argv(2));
+		return;
+	}
+	if (!NET_StringToAdr(Cmd_Argv(2), &clientadr)) { // Should never ever happen.
+		Com_DPrintf("Invalid IP address in ip2locResponse packet: %s\n", Cmd_Argv(2));
+		return;
+	}
+
+	// We won't check that the address is a non-LAN address.  That's going too far in error checking.
+
+	for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+		if (cl->state < CS_CONNECTED || cl->netchan.remoteAddress.type == NA_BOT || cl->location[0] ||
+				// IMPORTANT!  Make sure we check length of Cmd_Argv(1) above!!!
+				// Use strncmp instead of strcmp in case cl->ip2locChallengeStr didn't
+				// get initialized to zeroes when the client was created (programming error).
+				Q_strncmp(cl->ip2locChallengeStr, Cmd_Argv(1) + 17, sizeof(cl->ip2locChallengeStr) - 1)) {
+			continue;
+		}
+		if (NET_CompareBaseAdr(clientadr, cl->netchan.remoteAddress)) {
+			if (Cmd_Argv(6)[0]) {
+				Q_strcat(cl->location, sizeof(cl->location), Cmd_Argv(6));
+				citySpecified = qtrue;
+			}
+			if ((!Q_stricmp(Cmd_Argv(3), "US")) || (!Q_stricmp(Cmd_Argv(3), "CA"))) {
+				countryNeedsRegion = qtrue;
+			}
+			if (countryNeedsRegion && Cmd_Argv(5)[0]) {
+				if (citySpecified) {
+					Q_strcat(cl->location, sizeof(cl->location), ", ");
+				}
+				Q_strcat(cl->location, sizeof(cl->location), Cmd_Argv(5));
+				regionSpecified = qtrue;
+			}
+			if (Cmd_Argv(4)[0]) {
+				if (regionSpecified && citySpecified) {
+					Q_strcat(cl->location, sizeof(cl->location), " (");
+				}
+				else if (regionSpecified || citySpecified) {
+					Q_strcat(cl->location, sizeof(cl->location), ", ");
+				}
+				Q_strcat(cl->location, sizeof(cl->location), Cmd_Argv(4));
+				if (regionSpecified && citySpecified) {
+					Q_strcat(cl->location, sizeof(cl->location), ")");
+				}
+				countrySpecified = qtrue;
+			}
+
+			if (citySpecified || regionSpecified || countrySpecified) {
+				// Check the location string.  If the ip2loc server sends malicious strings,
+				// it may force the client to be dropped when we change their userinfo.
+				// Allow the same characters that the checkuserinfo.patch allows.
+				if (!charMapInitialized) {
+					// These are characters that are allowed/disallowed to be in cvar keys and values.
+					for (i = 0;   i <= 31;  i++) { charMap[i] = qfalse; }
+					for (i = 32;  i <= 33;  i++) { charMap[i] = qtrue; }
+					charMap[34] = qfalse; // double quote
+					for (i = 35;  i <= 58;  i++) { charMap[i] = qtrue; }
+					charMap[59] = qfalse; // semicolon
+					for (i = 60;  i <= 91;  i++) { charMap[i] = qtrue; }
+					charMap[92] = qfalse; // backslash
+					for (i = 93;  i <= 126; i++) { charMap[i] = qtrue; }
+					for (i = 127; i <= 255; i++) { charMap[i] = qfalse; }
+					charMapInitialized = qtrue;
+				}
+				ch = cl->location;
+				while (*ch) {
+					if (!charMap[0xff & *ch]) {
+						Com_DPrintf("The ip2loc server is misbehaving; the location for IP %s ended "
+								"up being \"%s\", which contains illegal characters\n",
+								NET_AdrToString(clientadr), cl->location);
+						Q_strncpyz(cl->location, "ILLEGAL CHARACTERS IN LOCATION", sizeof(cl->location));
+						break;
+					}
+					ch++;
+				}
+				if ('\0' == *ch) {
+					// Not illegal characters.
+					SV_SendServerCommand(NULL, "print \"    from %s\n\"", cl->location);
+				}
+			}
+			else {
+				Q_strcat(cl->location, sizeof(cl->location), "UNKNOWN LOCATION");
+			}
+			SV_UserinfoChanged(cl);
+			VM_Call( gvm, GAME_CLIENT_USERINFO_CHANGED, cl - svs.clients );
+			break;
+		}
+	}
+}
+
+/*
+================
+SVC_StatuswLoc
+
+Same as SVC_Status() but with [quoted] locations after player names.
+================
+*/
+void SVC_StatuswLoc(netadr_t from) {
+	char		player[1024];
+	char		status[MAX_MSGLEN];
+	int		i;
+	client_t	*cl;
+	playerState_t	*ps;
+	int		statusLength;
+	char		infostring[MAX_INFO_STRING];
+
+	// Ignore if we are in single player.
+	if (Cvar_VariableValue("g_gametype") == GT_SINGLE_PLAYER) {
+		return;
+	}
+
+	Q_strncpyz(infostring, Cvar_InfoString(CVAR_SERVERINFO), sizeof(infostring));
+
+	// Prevent spoofed reply packets.
+	Info_SetValueForKey(infostring, "challenge", Cmd_Argv(1));
+
+	status[0] = '\0';
+	statusLength = 0;
+
+	for (i = 0; i < sv_maxclients->integer; i++) {
+		if (statusLength >= sizeof(status) - 1) { break; }
+		cl = &svs.clients[i];
+		if (cl->state >= CS_CONNECTED) {
+			ps = SV_GameClientNum(i);
+			Q_snprintf(player, sizeof(player), "%i %i \"%s\" \"%s\"\n",
+					ps->persistant[PERS_SCORE], cl->ping, cl->name, cl->location);
+			Q_strncpyz(status + statusLength, player, sizeof(status) - statusLength);
+			statusLength += strlen(player);
+		}
+	}
+
+	NET_OutOfBandPrint(NS_SERVER, from, "statuswlocResponse\n%s\n%s", infostring, status);
+}
+
+/*
+===============
+SVC_AuthorizePlayer
+
+Deal with packets from the player database ban server.
+===============
+*/
+void SVC_AuthorizePlayer(netadr_t from)
+{
+	char		*arg1;
+	char		*arg2;
+	char		*arg3;
+	int		i;
+	char		ch;
+	netadr_t	clientAddr;
+	int		challenge;
+	qboolean	denied;
+	client_t	*cl;
+	const	char	*command = "authorizePlayer:xxxxxxxx";
+
+	// This is probably a redundant check with the compare of addresses below.
+	if (!sv_playerDBHost->string[0]) {
+		Com_DPrintf("playerDBResponse packet received from %s but no sv_playerDBHost set\n",
+			NET_AdrToString(from));
+		return;
+	}
+
+	// See if this packet is from the player database server.  Drop it if not.
+	// Note that it's very easy to spoof the source address of a UDP packet, so
+	// we use the challenge concept for further protection.
+	// Note that NET_CompareAdr() does compare the .type of the addresses.
+	if (!NET_CompareAdr(from, svs.playerDatabaseAddress)) {
+		Com_DPrintf("playerDBResponse packet received from invalid playerdb server: %s\n",
+			NET_AdrToString(from));
+		return;
+	}
+
+	arg1 = Cmd_Argv(1);
+	if (strlen(command) != strlen(arg1) ||
+			Q_strncmp(command, arg1, 16)) { // Check up to and including the ':'.
+		Com_DPrintf("First argument of playerDBResponse packet was \"%s\", not of the form \"%s\"\n",
+				arg1, command);
+		return;
+	}
+	challenge = 0;
+	for (i = 0; i < 8; i++) {
+		ch = arg1[16 + i];
+		if ('0' <= ch && ch <= '9') {
+			challenge |= (ch - '0') << ((7 - i) << 2);
+		}
+		else if ('a' <= ch && ch <= 'f') {
+			challenge |= (ch - 'a' + 10) << ((7 - i) << 2);
+		}
+		else {
+			Com_DPrintf("Invalid challenge \"%s\" in playerDBResponse authorizePlayer packet\n", arg1 + 16);
+			return;
+		}
+	}
+	Com_DPrintf("SVC_AuthorizePlayer: parsed hex challenge %s to be %i\n", arg1 + 16, challenge);
+
+	arg2 = Cmd_Argv(2);
+	// Make sure this is an IP address (so that DNS lookups won't happen below).
+	if (!NET_IsIP(arg2)) { // Does not currently handle IPv6 addresses.
+		Com_DPrintf("Invalid IP address in playerDBResponse packet: %s\n", arg2);
+		return;	
+	}
+
+	if (!NET_StringToAdr(arg2, &clientAddr)) {
+		// This condition should never happen because of the check above.
+		Com_DPrintf("Invalid IP address in playerDBResponse packet: %s\n", arg2);
+		return;
+	}
+
+	// This is a freak condition that will only happen if someone starts sending random crap
+	// from the auth server IP/port.  We never send auth packets for LAN addresses.
+	if (Sys_IsLANAddress(clientAddr)) {
+		Com_DPrintf("playerDBResponse packet received for a LAN address, ignoring\n");
+		return;
+	}
+
+	arg3 = Cmd_Argv(3);
+	if (!Q_stricmp(arg3, "denied")) {
+		denied = qtrue;
+	}
+	else if (!Q_stricmp(arg3, "allowed")) {
+		denied = qfalse;
+	}
+	else {
+		Com_DPrintf("Invalid third argument in playerDBResponse packet: %s\n", arg3);
+		return;
+	}
+
+	if (challenge & 0x80000000) { // High bit set.  This is a regular periodic auth (not getchallenge).
+		// Find the connected player that has this challenge and IP address.
+		for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+			if (cl->state >= CS_CONNECTED && ((challenge ^ cl->challenge) & 0x7fffffff) == 0 &&
+					NET_CompareBaseAdr(clientAddr, cl->netchan.remoteAddress)) {
+				if (!denied) {
+					// This player is allowed to play, so we don't need any further action.
+					return;
+				}
+				Com_DPrintf("Dropping player %s (address %s) at request of the banserver\n",
+						cl->name, NET_AdrToString(cl->netchan.remoteAddress));
+				if (sv_permaBanBypass->string[0] &&
+						!strcmp(Info_ValueForKey(cl->userinfo, "permabanbypass"),
+							sv_permaBanBypass->string)) {
+					Com_DPrintf("Ban avoided by having correct permabanbypass\n");
+				}
+				else {
+					SV_DropClient(cl, "denied access");
+					// A brand new challenge will be issued when the client tries to reconnect.
+					// The auth server will be contacted all over again.
+				}
+				return;
+			}
+		}
+		Com_DPrintf("SVC_AuthorizePlayer: player to periodic auth not connected (addr %s)\n",
+				NET_AdrToString(clientAddr));
+		return;
+	}
+
+	// Otherwise this is a getchallenge auth (high bit not set on challenge).
+	for (i = 0; i < MAX_CHALLENGES; i++) {
+		// Checking the connected state of the challenge is actually a bit superfluous because
+		// the chances of another challenge matching in address and challenge number is quite
+		// slim.  I'm still adding the connected check for clarity.
+		if (((challenge ^ svs.challenges[i].challenge) & 0x7fffffff) == 0 && (!svs.challenges[i].connected) &&
+				NET_CompareBaseAdr(clientAddr, svs.challenges[i].adr)) {
+			break;
+		}
+	}
+	if (i == MAX_CHALLENGES) {
+		Com_DPrintf("SVC_AuthorizePlayer: challenge not found\n");
+		return;
+	}
+	if (denied) {
+		Com_DPrintf("Marking challenge for client address %s as banned\n",
+				NET_AdrToString(svs.challenges[i].adr));
+		// There is a quirk (or "feature") in SV_DirectConnect().  When this banned player
+		// connects via SV_DirectConnect() and their challenge is marked as permabanned,
+		// they will be dropped, but their challenge.connected will never be
+		// reset to false; it will remain as true.  Therefore, when the player
+		// tries to reconnect from scratch (via getchallenge packet), they
+		// will pick up a brand new challenge, which will cause a packet to
+		// be sent to the playerdb auth server all over again.  This is good
+		// because changes to who's banned on the auth server will be picked
+		// up very quickly.  However this is also bad because more packets will
+		// be sent to the auth server.
+		svs.challenges[i].permabanned = qtrue;
+	}
+	// Let the client connect even if they are banned.  We do this for two reasons.
+	// First, we want their userinfo string for the sake of sending it to the playerdb
+	// so that we can track offenders better.  Second, we need a way of letting
+	// innocent players affected by someone else's ban into the server, and the only way
+	// this is possible is by means of the userinfo string, which first appears in
+	// SV_DirectConnect().  We use "permabanbypass" in the userinfo for this.
+	svs.challenges[i].pingTime = svs.time;
+	Com_DPrintf("Sending challengeResponse to %s from SVC_AuthorizePlayer\n",
+			NET_AdrToString(svs.challenges[i].adr));
+	NET_OutOfBandPrint(NS_SERVER, svs.challenges[i].adr, "challengeResponse %i", svs.challenges[i].challenge);
+}
+
+/*
 =================
 SV_ConnectionlessPacket
 
@@ -679,13 +1072,22 @@ void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 		SV_GetChallenge( from );
 	} else if (!Q_stricmp(c, "connect")) {
 		SV_DirectConnect( from );
+	/*
 	} else if (!Q_stricmp(c, "ipAuthorize")) {
 		SV_AuthorizeIpPacket( from );
+	*/
 	} else if (!Q_stricmp(c, "rcon")) {
 		SVC_RemoteCommand( from, msg );
+	} else if (!Q_stricmp(c, "ip2locResponse")) {
+		SVC_HandleIP2Loc( from );
+	} else if (!Q_stricmp(c, "getstatuswloc")) {
+		if (SV_CheckDRDoS(from)) { return; }
+		SVC_StatuswLoc( from );
 	////////////////////////////////////////////////
 	// separator for ip2loc.patch and playerdb.patch
 	////////////////////////////////////////////////
+	} else if (!Q_stricmp(c, "playerDBResponse")) {
+		SVC_AuthorizePlayer( from );
 	} else if (!Q_stricmp(c, "disconnect")) {
 		// if a client starts up a local server, we may see some spurious
 		// server disconnect messages when their new server sees our final
@@ -870,7 +1272,6 @@ void SV_CheckTimeouts( void ) {
 	}
 }
 
-
 /*
 ==================
 SV_CheckPaused
@@ -1032,6 +1433,46 @@ void SV_Frame( int msec ) {
 
 	// send a heartbeat to the master if needed
 	SV_MasterHeartbeat();
+
+	if (sv_playerDBPassword->modified) {
+		Com_DPrintf("Detected playerdb server password change\n");
+		Q_strncpyz(svs.playerDatabasePassword, sv_playerDBPassword->string, sizeof(svs.playerDatabasePassword));
+		Cvar_Set(sv_playerDBPassword->name, "");
+		sv_playerDBPassword->modified = qfalse;
+	}
+
+	// These are very inexpensive operations; they don't impact CPU usage even if
+	// the playerdb system is turned off.
+	static int authFrameCount = 0;
+	static int authClientInx = 0;
+	client_t *cl;
+	authFrameCount++;
+	if (authFrameCount == 80) { // 4 seconds during normal gameplay (20 frames per sec)
+		authFrameCount = 0;
+		if (authClientInx >= sv_maxclients->integer) {
+			authClientInx = 0;
+		}
+		cl = &svs.clients[authClientInx];
+		if (cl->state >= CS_CONNECTED && // IPv6 not supported at this point.
+				(cl->netchan.remoteAddress.type == NA_IP /* || cl->netchan.remoteAddress.type == NA_IP6 */) &&
+				sv_playerDBBanIDs->string[0]) {
+			SV_ResolvePlayerDB();
+			if (svs.playerDatabaseAddress.type != NA_BAD && !Sys_IsLANAddress(cl->netchan.remoteAddress)) {
+				Com_DPrintf("Sending authorizePlayer packet to playerdb for client address %i.%i.%i.%i\n",
+						cl->netchan.remoteAddress.ip[0], cl->netchan.remoteAddress.ip[1],
+						cl->netchan.remoteAddress.ip[2], cl->netchan.remoteAddress.ip[3]);
+				NET_OutOfBandPrint(NS_SERVER,
+					svs.playerDatabaseAddress,
+					"playerDBRequest\n%s\nauthorizePlayer:%08x\n%s\n%i.%i.%i.%i\n",
+					svs.playerDatabasePassword,
+					0x80000000 | (cl->challenge),
+					sv_playerDBBanIDs->string,
+					cl->netchan.remoteAddress.ip[0], cl->netchan.remoteAddress.ip[1],
+					cl->netchan.remoteAddress.ip[2], cl->netchan.remoteAddress.ip[3]);
+			}
+		}
+		authClientInx++;
+	}
 }
 
 //============================================================================

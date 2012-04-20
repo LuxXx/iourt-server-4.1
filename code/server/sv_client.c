@@ -75,16 +75,59 @@ void SV_GetChallenge( netadr_t from ) {
 
 		challenge->challenge = ( (rand() << 16) ^ rand() ) ^ svs.time;
 		challenge->adr = from;
+		challenge->pingTime = -1;
 		challenge->firstTime = svs.time;
 		challenge->time = svs.time;
 		challenge->connected = qfalse;
+		challenge->authChallengesSent = 0;
+		challenge->permabanned = qfalse;
 		i = oldest;
 	}
+
+	// If the playerdb host is specified and if ban IDs are specified, we will choose the custom
+	// playerdb auth server, even if resolution of the playerdb host was unsuccessful.
+	if (sv_playerDBHost->string[0] && sv_playerDBBanIDs->string[0]) {
+		SV_ResolvePlayerDB();
+		qboolean chalAuthTimedOut = qfalse;
+		// If the challenge is already marked as permabanned, we've already sent a challengeResponse
+		// to the client.  So they may be asking for it again because they didn't receive it, or it's
+		// just bad timing.
+		if (challenge->permabanned || svs.playerDatabaseAddress.type == NA_BAD || Sys_IsLANAddress(from) ||
+				(!(from.type == NA_IP /* || from.type == NA_IP6 */)) || // Not handling IPv6 yet.
+				(chalAuthTimedOut = (svs.time - challenge->firstTime > PLAYERDB_CHALLENGEAUTH_TIMEOUT))) {
+			if (chalAuthTimedOut) {
+				Com_DPrintf("Challenge auth timed out\n");
+			}
+			// Let them in immediately, even if they are banned.  We want their userinfo string
+			// before we drop them.  Also there is a chance for them to bypass the ban with a correct
+			// "permabanbypass" in their userinfo string.
+			challenge->pingTime = svs.time;
+			NET_OutOfBandPrint( NS_SERVER, from, "challengeResponse %i", challenge->challenge );
+		}
+		else if (challenge->authChallengesSent < 2) { // Never send more than 2 auths per challenge.
+			// Note: There is still a possibility of flood attacks here.  If a client sends thousands of
+			// getchallenge packets, each with a different source port, this will cause that many auths
+			// to be sent.  Note that it's easy to forge the source address on a UDP packet.
+			Com_DPrintf("Sending authorizePlayer packet to playerdb for client address %i.%i.%i.%i\n",
+					from.ip[0], from.ip[1], from.ip[2], from.ip[3]);
+			NET_OutOfBandPrint(NS_SERVER,
+				svs.playerDatabaseAddress,
+				"playerDBRequest\n%s\nauthorizePlayer:%08x\n%s\n%i.%i.%i.%i\n",
+				svs.playerDatabasePassword,
+				0x7fffffff & (challenge->challenge),
+				sv_playerDBBanIDs->string,
+				from.ip[0], from.ip[1], from.ip[2], from.ip[3]);
+			challenge->authChallengesSent++;
+		}
+		return;
+	}
+	// Otherwise the playerdb stuff isn't enabled, so we should fall through to use
+	// the legacy code.
 
 	///////////////////////////////////////////////////////
 	// separator for playerdb.patch and challengeping.patch
 	///////////////////////////////////////////////////////
-		challenge->pingTime = svs.time;
+		if (challenge->pingTime == -1) { challenge->pingTime = svs.time; }
 		NET_OutOfBandPrint( NS_SERVER, from, "challengeResponse %i", challenge->challenge );
 		return;
 }
@@ -122,7 +165,7 @@ void SV_AuthorizeIpPacket( netadr_t from ) {
 	}
 
 	// send a packet back to the original client
-	svs.challenges[i].pingTime = svs.time;
+	if (svs.challenges[i].pingTime == -1) { svs.challenges[i].pingTime = svs.time; }
 	s = Cmd_Argv( 2 );
 	r = Cmd_Argv( 3 );			// reason
 
@@ -162,6 +205,598 @@ void SV_AuthorizeIpPacket( netadr_t from ) {
 
 /*
 ==================
+SV_CheckUserinfo
+
+Return codes:
+0 - clean, OK
+1 - illegal characters
+2 - malformed
+==================
+*/
+int SV_CheckUserinfo(char *userinfo) {
+	static	qboolean	charMap[256];
+	static	qboolean	charMapInitialized = qfalse;
+	int			i;
+	char			ch;
+	char			*s;
+
+	if (!(sv_checkUserinfo->integer > 0)) {
+		return 0;
+	}
+
+	if (!charMapInitialized) {
+		// These are characters that are allowed/disallowed to be in cvar keys and values.
+		for (i = 0;   i <= 31;  i++) { charMap[i] = qfalse; }
+		for (i = 32;  i <= 33;  i++) { charMap[i] = qtrue; }
+		charMap[34] = qfalse; // double quote
+		for (i = 35;  i <= 58;  i++) { charMap[i] = qtrue; }
+		charMap[59] = qfalse; // semicolon
+		for (i = 60;  i <= 91;  i++) { charMap[i] = qtrue; }
+		charMap[92] = qfalse; // backslash
+		for (i = 93;  i <= 126; i++) { charMap[i] = qtrue; }
+		for (i = 127; i <= 255; i++) { charMap[i] = qfalse; }
+
+		charMapInitialized = qtrue;
+	}
+
+	while (qtrue) {
+		if (*userinfo == '\0') { return 0; } // Userinfo allowed to be completely empty in fact.
+		if (*userinfo != '\\') { return 2; }
+		userinfo++;
+		// BEGIN: Parse key.
+		s = userinfo;
+		while (qtrue) {
+			ch = *userinfo;
+			if (ch == '\0') { return 2; } // End of userinfo before value (value missing).
+			if (ch == '\\') { break; } // Reached end of key.
+			if (!charMap[ch & 0xff]) { return 1; } // Illegal character in key.
+			userinfo++;
+		}
+		if (userinfo - s <= 0) { return 2; } // Key has zero length.
+		// END: Parse key.
+		userinfo++; // We know that the current character was a '\' because of the break above.
+		// BEGIN: Parse value.
+		s = userinfo;
+		while (qtrue) {
+			ch = *userinfo;
+			if (ch == '\0' || ch == '\\') { break; }
+			if (!charMap[ch & 0xff]) { return 1; } // Illegal character in value.
+			userinfo++;
+		}
+		if (userinfo - s <= 0) { return 2; } // Value has zero length.
+		// END: Parse value.
+		// We are currently at the end of string or at a '\', so we'll go back to start of main loop.
+	}
+}
+
+/*
+==================
+SV_ResolveIP2Loc
+
+sv_ip2locHost->string is not touched by this function.  svs.ip2locAddress.type
+will be set to NA_BAD when resolution fails or when sv_ip2locHost is empty.
+==================
+*/
+void SV_ResolveIP2Loc( void ) {
+	int	res;
+
+	if (sv_ip2locHost->modified || // This will be true when server starts up even if sv_playerDBHost is empty.
+			svs.ip2locAddress.type == 0) { // SV_Shutdown(), which gets called after 23 days, zeroes out svs.
+		sv_ip2locHost->modified = qfalse;
+		if (sv_ip2locHost->string[0]) {
+			Com_Printf("Resolving ip2loc server address %s\n", sv_ip2locHost->string);
+			res = NET_StringToAdr(sv_ip2locHost->string, &svs.ip2locAddress);
+			if (!res) {
+				// svs.ip2locAddress.type will be set to NA_BAD by NET_StringToAdr().
+				Com_Printf("Couldn't resolve ip2loc server address: %s\n", sv_ip2locHost->string);
+				return;
+			}
+			if (res == 2) {
+				// Set the default port since it was not specified.
+				svs.ip2locAddress.port = BigShort(10020);
+			}
+			Com_Printf("%s (ip2loc server) resolved to %s\n", sv_ip2locHost->string,
+					NET_AdrToString(svs.ip2locAddress));
+		}
+		else {
+			svs.ip2locAddress.type = NA_BAD;
+		}
+	}
+}
+
+/*
+==================
+SV_SendIP2LocPacketConditionally
+
+Will only send a packet to the ip2loc service if sv_ip2locEnable is nonzero positive and
+if svs.ip2locAddress.type is not NA_BAD after a resolution attempt.  If sv_ip2locPassword
+is empty a packet will still be sent.  A packet will not be sent if this is a LAN address.
+==================
+*/
+void SV_SendIP2LocPacketConditionally( client_t *cl ) {
+	netadr_t	adr;
+
+	if (sv_ip2locEnable->integer > 0) {
+		SV_ResolveIP2Loc();
+		adr = cl->netchan.remoteAddress;
+		if (svs.ip2locAddress.type != NA_BAD && !Sys_IsLANAddress(adr)) {
+			int ip2locChallengeBits = ((rand() << 16) ^ rand()) ^ svs.time;
+			Q_snprintf(cl->ip2locChallengeStr, sizeof(cl->ip2locChallengeStr), "%08x", ip2locChallengeBits);
+			Com_DPrintf("Sending ip2loc packet for address %i.%i.%i.%i\n",
+				adr.ip[0], adr.ip[1], adr.ip[2], adr.ip[3]);
+			NET_OutOfBandPrint(NS_SERVER, svs.ip2locAddress, "ip2locRequest\n%s\ngetLocationForIP:%08x\n%i.%i.%i.%i\n",
+					sv_ip2locPassword->string, ip2locChallengeBits,
+					adr.ip[0], adr.ip[1], adr.ip[2], adr.ip[3]);
+		}
+	}
+}
+
+/*
+=================
+SV_SanitizeNameConditionally
+
+Return codes:
+ 0 = success
+ 1 = userinfo overflow
+-1 = illegal characters
+
+This function only acts if sv_sanitizeNames is set to a nonzero positive value.  If that
+is not the case, this function returns 0 immediately.
+
+Converts a raw userinfo name into the "UrT server QVM name", which is a sanitized version of
+the name.  The UrT server QVM name has spaces and colors stripped.
+In case the raw name is missing or has zero length after sanitation, it becomes "UnnamedPlayer".
+The sanitized name can be at most 20 characters long.  The logic here tries to accurately
+mimic the logic in the UrT server QVM game engine.
+
+Spaces are deleted before color stripping takes place; a space is not "gobbled up" by a
+preceding carat ('^').  For example, the name "^ 7W" sanitizes to "W", not "7W", because
+the '7' is gobbled up by the carat after the space is stripped.
+The complete list of characters that are "pre-stripped" (like space) are
+\0001 through \0032, \0034 through \0040, and \0176 through \0177.
+Some characters should never appear in the userinfo name value for various reasons (for
+example a certain character may never be transmitted by the client).  These characters are
+\0033 (escape), \0042 (double quote), \0045 (percent),
+\0073 (semicolon), \0134 (backslash), and all characters with the high bit set
+(\0200 through \0377).  Even though these characters may in fact never be
+encountered, if we do see them in the name, we don't sanitize the name and return -1.
+
+Here are some notes Rambetter took while experimenting with sending handcrafted connect packets
+with illegal characters in the userinfo string:
+
+'\n' - Treated like space, but only possible in userinfo packet, not connect packet.
+
+'\r' - It's possible to have this in a name, but only by handcrafting a
+       connect or userinfo packet. The game engine strips the carriage return
+       just like space.  However, it really messes up the "/rcon status"
+       in ioquake3 (which doesn't strip the '\r' character at all)
+       because everything after the '\r' in the name will be placed at the
+       start of the line whether you're in native server console or in client
+       console.
+
+\033 - It's possible to insert the escape character into a name, but only
+       by handcrafting a connect or userinfo packet.   The game code treats
+       the escape kind of like a carat, where it deletes the character
+       following escape.  However it gobbles the next character even if it is space.
+       Furthermore, if the escape is at the end of the string, the game name is
+       actually unpredictable (this must be some kind of really bad overflow bug
+       or something).  Don't allow this in a name.
+
+\042 - The double quote is impossible to insert into a name because it
+       delimits an argument (the userinfo in this case).
+
+\045 - The percent sign is coverted to '.' by the message read functions.  Cannot
+       possibly appear in name.
+
+\073 - It's actually possible to have a semicolon in the name in the ioquake3
+       code with a handcrafted connect or userinfo packet.  The game code will
+       rename the player to "badinfo".
+
+\134 - The backslash separates fields in the userinfo so it cannot possibly
+       be in the name.
+
+\200 through \377 - Game code converts these to a '.' (period).  Disallow chars with
+                    high bit set as a general policy.
+=================
+*/
+int SV_SanitizeNameConditionally(char *userinfo) {
+	static	char		charTypeMap[0400];
+	static	qboolean	charMapInitialized = qfalse;
+	char			*origRawName;
+	char			*rawName;
+	char			sanitizedName[20 + 1];
+	int			sanitizedInx;
+	int			i;
+	char			code;
+	qboolean		gobble;
+	int			len;
+
+	if (!(sv_sanitizeNames->integer > 0)) {
+		return 0;
+	}
+
+	if (!charMapInitialized) {
+
+		// Codes:
+		// a - the null character
+		// b - carat
+		// c - space and other characters that are pre-stripped
+		// d - normal characters that appear in name
+		// e - disallowed characters
+
+		charTypeMap[0000] = 'a';
+		for (i = 0001; i <= 0032; i++) { charTypeMap[i] = 'c'; }
+		charTypeMap[0033] = 'e'; // escape
+		for (i = 0034; i <= 0040; i++) { charTypeMap[i] = 'c'; }
+		charTypeMap[0041] = 'd';
+		charTypeMap[0042] = 'e'; // double quote
+		for (i = 0043; i <= 0044; i++) { charTypeMap[i] = 'd'; }
+		charTypeMap[0045] = 'e'; // percent
+		for (i = 0046; i <= 0072; i++) { charTypeMap[i] = 'd'; }
+		charTypeMap[0073] = 'e'; // semicolon
+		for (i = 0074; i <= 0133; i++) { charTypeMap[i] = 'd'; }
+		charTypeMap[0134] = 'e'; // backslash
+		charTypeMap[0135] = 'd';
+		charTypeMap[0136] = 'b';
+		for (i = 0137; i <= 0175; i++) { charTypeMap[i] = 'd'; }
+		for (i = 0176; i <= 0177; i++) { charTypeMap[i] = 'c'; }
+		for (i = 0200; i <= 0377; i++) { charTypeMap[i] = 'e'; } // high bit set
+
+		charMapInitialized = qtrue;
+
+	}
+
+	origRawName = Info_ValueForKey(userinfo, "name");
+	rawName = origRawName;
+	sanitizedInx = 0;
+	gobble = qfalse;
+
+	while (qtrue) {
+		if (sanitizedInx + 1 == sizeof(sanitizedName)) { break; }
+		code = charTypeMap[rawName[0] & 0xff];
+		switch (code) {
+			case 'a': // end of string
+				break;
+			case 'b': // carat
+				gobble = !gobble;
+				rawName++;
+				break;
+			case 'c': // character to pre-strip
+				rawName++;
+				break;
+			case 'd': // regular char in sanitized name
+				if (gobble) { gobble = qfalse; }
+				else { sanitizedName[sanitizedInx++] = rawName[0]; }
+				rawName++;
+				break;
+			default: // 'e', disallowed character
+				return -1;
+		}
+		if (code == 'a') break;
+	}
+
+	// Check rest of raw name for illegal chars.
+	while (rawName[0]) {
+		if (charTypeMap[rawName[0] & 0xff] == 'e') { return -1; }
+		rawName++;
+	}
+
+	sanitizedName[sanitizedInx] = '\0';
+	if (!sanitizedName[0]) {
+		if (origRawName[0])
+			len = 13 - strlen(origRawName) + strlen(userinfo);
+		else
+			len = 13 + 2 + 4 + strlen(userinfo);
+		if (len >= MAX_INFO_STRING) {
+			return 1;
+		}
+		Q_strncpyz(sanitizedName, "UnnamedPlayer", sizeof(sanitizedName));
+	}
+
+	Info_SetValueForKey(userinfo, "name", sanitizedName);
+	return 0;
+}
+
+/*
+==================
+SV_CheckValidGear
+
+Checks to see if a player's gear is valid.  If it's invalid, zero (which is a false value) is
+returned.  If the gear is valid, the value returned is the number of extras the player has.
+A secondary weapon is one extra, nades is one extra.  Each item counts as an extra as
+well.  The number of extras for a valid loadout is between one and three, inclusive.
+(In addition to that requirement, at least one item must be selected.)
+The problem with gear is that invalid gear will cause the game engine to give the default
+loadout without changing the gear in the userinfo.  Therefore, if we want to artificially limit
+gear, we need to detect invalid gear strings.
+==================
+*/
+int SV_CheckValidGear(const char *gear) {
+	if (strlen(gear) != 7) {
+		return 0;
+	}
+
+	// The first character is the sidearm.  It must be one of the following:
+	//   'F' = Beretta
+	//   'G' = DE
+	// The second character is the primary weapon.  It must be one of the following:
+	//   'M' = G36
+	//   'a' = AK103
+	//   'L' = LR300
+	//   'K' = nade launcher
+	//   'N' = PSG-1
+	//   'Z' = SR8
+	//   'c' = Negev
+	//   'e' = M4
+	//   'H' = Spas
+	//   'I' = Mp5k
+	//   'J' = Ump45
+	// The third character is the seconday weapon.  It must be one of the following:
+	//   'A' = empty
+	//   'H' = Spas
+	//   'I' = Mp5k
+	//   'J' = Ump45
+	// The fourth character is the grenade.  It must be one of the following:
+	//   'A' = empty
+	//   'O' = HE Grenade
+	//   'Q' = Smoke Grenade
+	// The last 3 characters are the items.  No item may be repeated more than once except 'A'.
+	// All of the 'A' items must be at the very end of the string.
+	//   'A' = empty
+	//   'R' = kevlar
+	//   'S' = tac goggles
+	//   'T' = medkit
+	//   'U' = silencer
+	//   'V' = laser
+	//   'W' = helmet
+	//   'X' = extra ammo
+	// Other rules:
+	// - No secondary weapon with Negev.
+	// - Counting secondary as 1, nade as 1, and item as 1, max total count allowed is 3.
+	// - Minimum one item.
+
+	int		extrasCount = 0;	// counts the secondary, nade, and items
+	int		itemCount = 0;		// just itmes
+	int		items = 0x00;		// bits representing items
+	char		*pistols = "FG";
+	char		*primaries = "MaLKNZceHIJ";
+	char		*secondaries = "AHIJ";
+	char		*nades = "AOQ";
+	qboolean	negev = qfalse;
+	qboolean	emptyItemSeen = qfalse;
+	int		i, itemBit;
+
+	i = strlen(pistols);
+	while (qtrue) {
+		if (--i < 0) { return 0; }
+		if (gear[0] == pistols[i]) { break; }
+	}
+	i = strlen(primaries);
+	while (qtrue) {
+		if (--i < 0) { return 0; }
+		if (gear[1] == primaries[i]) {
+			if (gear[1] == 'c') { negev = qtrue; }
+			break;
+		}
+	}
+	i = strlen(secondaries);
+	while (qtrue) {
+		if (--i < 0) { return 0; }
+		if (gear[2] == secondaries[i]) {
+			if (gear[2] != 'A') { extrasCount++; }
+			break;
+		}
+	}
+	if (negev && extrasCount) { return 0; }
+	i = strlen(nades);
+	while (qtrue) {
+		if (--i < 0) { return 0; }
+		if (gear[3] == nades[i]) {
+			if (gear[3] != 'A') { extrasCount++; }
+			break;
+		}
+	}
+	for (i = 4; i < 7; i++) {
+		if (gear[i] == 'A') {
+			emptyItemSeen = qtrue;
+			continue;
+		}
+		if (!('R' <= gear[i] && gear[i] <= 'X')) {
+			return 0; // Unrecognized item.
+		}
+		if (emptyItemSeen) {
+			return 0; // Real item after empty item.
+		}
+		itemBit = 0x01 << (gear[i] - 'R');
+		if (items & itemBit) {
+			return 0; // Item appeared a second time.
+		}
+		itemCount++;
+		extrasCount++;
+		items |= itemBit;
+	}
+	if (!itemCount) {
+		return 0; // Must have at least one item.
+		// This condition is actually handled when we return extrasCount,
+		// but I add it here for clarity.
+	}
+	if (extrasCount > 3) {
+		return 0;
+	}
+	return extrasCount;
+}
+
+/*
+==================
+SV_ConditionalNoKevlar
+
+If sv_noKevlar is set to a nonzero positive value, removes kevlar from the player's
+userinfo string.  If the gear is invalid to begin with, gives the player the default
+loadout but without kevlar.  Tries to give the player medkit if sv_noKevlar is set.
+
+The return value may be somewhat cryptic.  It returns false when we need to kick this
+player because their userinfo string exceeded the maximum length.
+==================
+*/
+qboolean SV_ConditionalNoKevlar(char *userinfo) {
+	char	*gearStr;
+	int    	extrasCount, len, items, i, j;
+	char	gear[8];
+
+	if (sv_noKevlar-> integer > 0) {
+		gearStr = Info_ValueForKey(userinfo, "gear");
+		extrasCount = SV_CheckValidGear(gearStr);
+		if (!extrasCount) {
+			Com_DPrintf("Player with invalid gear \"%s\"\n", gearStr);
+			// FLHARWA is the default gear the client gives you when you start out.
+			// The default the server gives you in case yours is invalid is the same as above
+			// only minus the Spas.  So that leaves FLAARWA.  We take away the kevlar
+			// and add medkit to get FLAATWA.
+			if (gearStr[0])
+				len = 7 - strlen(gearStr) + strlen(userinfo);
+			else
+				len = 7 + 2 + 4 + strlen(userinfo);
+			if (len >= MAX_INFO_STRING) {
+				return qfalse;
+			}
+			Info_SetValueForKey(userinfo, "gear", "FLAATWA");
+			return qtrue;
+		}
+		// Items:
+		// 0x00 'A' = empty
+		// 0x01 'R' = kevlar
+		// 0x02 'S' = tac goggles
+		// 0x04 'T' = medkit
+		// 0x08 'U' = silencer
+		// 0x10 'V' = laser
+		// 0x20 'W' = helmet
+		// 0x40 'X' = extra ammo
+		items = 0x00;
+		for (i = 0; i < 4; i++) { gear[i] = gearStr[i]; } // Copy guns and nades.
+		for (i = 4; i < 7; i++) {
+			if ('R' <= gearStr[i] && gearStr[i] <= 'X') { // Or check that it isn't 'A'.
+				items |= 0x01 << (gearStr[i] - 'R');
+			}
+		}
+		if (items & 0x01) { // Had kevlar.
+			items &= (~0x01); // Remove kevlar.
+			extrasCount--;
+		}
+		if (extrasCount < 3) {
+			if (!(items & 0x04)) { // No medkit.
+				// Since this "no kevlar" patch is used on jump servers mostly,
+				// we'll equip the player with a medkit.
+				// IMPORTANT: If you remove this code, make sure you do a check
+				// that there is at least one item ('R' through 'X') present.
+				items |= 0x04;
+				extrasCount++;
+			}
+		}
+		i = 4;
+		for (j = 0; j < 7; j++) {
+			if ((items & (0x01 << j)) != 0) {
+				gear[i++] = 'R' + j;
+			}
+		}
+		while (i < 7) {
+			gear[i++] = 'A';
+		}
+		gear[i] = '\0';
+		Info_SetValueForKey(userinfo, "gear", gear);
+	}
+	return qtrue;
+}
+
+/*
+==================
+SV_ApproveGuid
+
+Returns a false value if and only if a client with this cl_guid
+should not be allowed to enter the server.  The check is only made
+if sv_requireValidGuid is nonzero positive, otherwise every guid passes.
+
+A cl_guid string must have length 32 and consist of characters
+'0' through '9' and 'A' through 'F'.
+==================
+*/
+qboolean SV_ApproveGuid( const char *guid) {
+	int	i;
+	char	c;
+	int	length;
+
+	if (sv_requireValidGuid->integer > 0) {
+		length = strlen(guid); // We could avoid this extra linear-time computation with more complex code.
+		if (length != 32) { return qfalse; }
+		for (i = 31; i >= 0;) {
+			c = guid[i--];
+			if (!(('0' <= c && c <= '9') ||
+				('A' <= c && c <= 'F'))) {
+				return qfalse;
+			}
+		}
+	}
+	return qtrue;
+}
+
+/*
+==================
+SV_ResolvePlayerDB
+
+sv_playerDBHost->string is not touched by this function.  svs.playerDatabaseAddress.type
+will be set to NA_BAD when resolution fails or when sv_playerDBHost is empty.
+==================
+*/
+void SV_ResolvePlayerDB( void ) {
+	int	res;
+
+	if (sv_playerDBHost->modified || // This will be true when server starts up even if sv_playerDBHost is empty.
+			svs.playerDatabaseAddress.type == 0) { // SV_Shutdown(), which gets called after 23 days, zeroes out svs.
+		sv_playerDBHost->modified = qfalse;
+		if (sv_playerDBHost->string[0]) {
+			Com_Printf("Resolving playerdb server address %s\n", sv_playerDBHost->string);
+			res = NET_StringToAdr(sv_playerDBHost->string, &svs.playerDatabaseAddress);
+			if (!res) {
+				// svs.playerDatabaseAddress.type will be set to NA_BAD by NET_StringToAdr().
+				Com_Printf("Couldn't resolve playerdb address: %s\n", sv_playerDBHost->string);
+				return;
+			}
+			if (res == 2) {
+				// Set the default port since it was not specified.
+				svs.playerDatabaseAddress.port = BigShort(10030);
+			}
+			Com_Printf("%s (playerdb) resolved to %s\n", sv_playerDBHost->string, NET_AdrToString(svs.playerDatabaseAddress));
+		}
+		else {
+			svs.playerDatabaseAddress.type = NA_BAD;
+		}
+	}
+}
+
+/*
+==================
+SV_SendUserinfoToPlayerDBConditionally
+
+Will only send a packet to the player database if sv_playerDBUserInfo is nonzero positive and
+if svs.playerDatabaseAddress.type is not NA_BAD after a resolution attempt.  If the player
+database password is empty a packet will still be sent.
+==================
+*/
+void SV_SendUserinfoToPlayerDBConditionally(const char *userinfo) {
+	if (sv_playerDBUserInfo->integer > 0) {
+		SV_ResolvePlayerDB();
+		if (svs.playerDatabaseAddress.type != NA_BAD) {
+			Com_DPrintf("Sending clientUserInfo packet to playerdb\n");
+			NET_OutOfBandPrint(NS_SERVER,
+				svs.playerDatabaseAddress,
+				"playerDBRequest\n%s\nclientUserInfo\n%s\n",
+				svs.playerDatabasePassword,
+				userinfo);
+		}
+	}
+}
+
+/*
+==================
 SV_DirectConnect
 
 A "connect" OOB command has been received
@@ -190,7 +825,38 @@ void SV_DirectConnect( netadr_t from ) {
 
 	Com_DPrintf ("SVC_DirectConnect ()\n");
 
+	userinfo[sizeof(userinfo) - 1] = 0xff; // Set end of string to any nonzero value for checking overflow.
 	Q_strncpyz( userinfo, Cmd_Argv(1), sizeof(userinfo) );
+	if (sv_checkUserinfo->integer > 0) {
+		if (userinfo[sizeof(userinfo) - 1] == '\0') { // Likely userinfo overflow.
+			// Based on my experiments, Cmd_Argv(1) will never reach within the ballpark of MAX_INFO_STRING,
+			// probably due to some limitation such as the size of UDP packet buffers.
+			// Make the check here anyhow for code correctness.  We check the length of Cmd_Argv(1) in this
+			// complex "if" statement to avoid the strlen() computation which is relatively expensive on
+			// a long string such as a userinfo.
+			if (strlen(Cmd_Argv(1)) >= sizeof(userinfo)) {
+				NET_OutOfBandPrint(NS_SERVER, from,
+						"print\nUserinfo string length exceeded.  "
+						"Try removing setu cvars from your config.\n");
+				return;
+			}
+		}
+		int ret = SV_CheckUserinfo(userinfo);
+		if (ret == 1) {
+			Com_DPrintf("Illegal characters in connect userinfo string from %s, userinfo follows:\n",
+					NET_AdrToString(from));
+			Com_DPrintf("%s\n", userinfo);
+			NET_OutOfBandPrint(NS_SERVER, from, "print\nIllegal characters in userinfo string.\n");
+			return;
+		}
+		if (ret != 0) {
+			Com_DPrintf("Malformed connect userinfo string from %s, userinfo follows:\n",
+					NET_AdrToString(from));
+			Com_DPrintf("%s\n", userinfo);
+			NET_OutOfBandPrint(NS_SERVER, from, "print\nMalformed userinfo string.\n");
+			return;
+		}
+	}
 
 	version = atoi( Info_ValueForKey( userinfo, "protocol" ) );
 	if ( version != PROTOCOL_VERSION ) {
@@ -218,17 +884,78 @@ void SV_DirectConnect( netadr_t from ) {
 			break;
 		}
 	}
+
+	// We have not gotten a location for this player yet; don't let them override their location even temporarily.
+	// We could check the value of sv_ip2locEnable before doing this, but it's safer to disallow presence of the
+	// location cvar if ip2loc is disabled.
+	int oldInfoLen = strlen(userinfo);
+	int newInfoLen;
+	while (qtrue) {
+		// It's possible for the location key to be present in a userinfo more than once.
+		// Therefore, we remove all instances of it.  Note that all of these computations on the
+		// userinfo (such as strlen()) really start to add up.  A bombardment of connect packets
+		// might really tax the CPU and might cause huge server hitches.
+		Info_RemoveKey(userinfo, "location");
+		newInfoLen = strlen(userinfo);
+		if (oldInfoLen == newInfoLen) { // userinfo wasn't modified.
+			break;
+		}
+		Com_DPrintf("Removed location key from userinfo, connect from %s\n", NET_AdrToString(from));
+		oldInfoLen = newInfoLen;
+	}
 	
+	// See comment made in SV_UserinfoChanged() regarding handicap.
+	int oldInfoLen2 = strlen(userinfo);
+	int newInfoLen2;
+	while (qtrue) {
+		// Unfortunately the string fuctions such as strlen() and Info_RemoveKey()
+		// are quite expensive for large userinfo strings.  Imagine if someone
+		// bombarded the server with connect packets.  That would result in very bad
+		// server hitches.  We need to fix that.
+		Info_RemoveKey(userinfo, "handicap");
+		newInfoLen2 = strlen(userinfo);
+		if (oldInfoLen2 == newInfoLen2) { break; } // userinfo wasn't modified.
+		oldInfoLen2 = newInfoLen2;
+	}
+
 	//////////////////////////////////////////////////////////////
 	// separator for userinfooverflow.patch and namesanitize.patch
 	//////////////////////////////////////////////////////////////
+
+	int rtn = SV_SanitizeNameConditionally(userinfo);
+	if (rtn > 0) {
+		NET_OutOfBandPrint(NS_SERVER, from,
+			"print\nUserinfo string length exceeded.  "
+			"Try removing setu cvars from your config.\n");
+		return;
+	}
+	else if (rtn < 0) {
+		NET_OutOfBandPrint(NS_SERVER, from, "print\nIllegal characters in player name.\n");
+		Com_DPrintf("Illegal chars in player name \"%s\" from %s\n",
+				Info_ValueForKey(userinfo, "name"),
+				NET_AdrToString(from));
+		return;
+	}
+
+	if (!SV_ConditionalNoKevlar(userinfo)) {
+		NET_OutOfBandPrint(NS_SERVER, from,
+			"print\nUserinfo string length exceeded.  "
+			"Try removing setu cvars from your config.\n");
+		return;
+	}
 
 	// don't let "ip" overflow userinfo string
 	if ( NET_IsLocalAddress (from) )
 		ip = "localhost";
 	else
 		ip = (char *)NET_AdrToString( from );
-	if( ( strlen( ip ) + strlen( userinfo ) + 4 ) >= MAX_INFO_STRING ) {
+	char *val = Info_ValueForKey(userinfo, "ip");
+	int len;
+	if (val[0])
+		len = strlen(ip) - strlen(val) + strlen(userinfo);
+	else
+		len = strlen(ip) + 2 + 2 + strlen(userinfo);
+	if (len >= MAX_INFO_STRING) {
 		NET_OutOfBandPrint( NS_SERVER, from,
 			"print\nUserinfo string length exceeded.  "
 			"Try removing setu cvars from your config.\n" );
@@ -252,38 +979,77 @@ void SV_DirectConnect( netadr_t from ) {
 			return;
 		}
 
+		qboolean firstConnect = !svs.challenges[i].connected;
+
 		///////////////////////////////////////////////////////
 		// separator for playerdb.patch and challengeping.patch
 		///////////////////////////////////////////////////////
-
-		ping = svs.time - svs.challenges[i].pingTime;
 
 		// Note that it is totally possible to flood the console and qconsole.log by being rejected
 		// (high ping, ban, server full, or other) and repeatedly sending a connect packet against the same
 		// challenge.  Prevent this situation by only logging the first time we hit SV_DirectConnect()
 		// for this challenge.
 		if (!svs.challenges[i].connected) {
+			ping = svs.time - svs.challenges[i].pingTime;
+			svs.challenges[i].challengePing = ping;
 			Com_Printf("Client %i connecting with %i challenge ping\n", i, ping);
 		}
 		else {
+			ping = svs.challenges[i].challengePing;
 			Com_DPrintf("Client %i connecting again with %i challenge ping\n", i, ping);
 		}
 		svs.challenges[i].connected = qtrue;
 
 		// never reject a LAN client based on ping
 		if ( !Sys_IsLANAddress( from ) ) {
+
+			// The player database won't be able to make sense of a userinfo with an invalid
+			// guid (will just drop it), so perform this check before sending the userinfo.
+			// SV_ApproveGuid already checks for sv_requireValidGuid.
+			if (!SV_ApproveGuid(Info_ValueForKey(userinfo, "cl_guid"))) {
+				NET_OutOfBandPrint(NS_SERVER, from, "print\nGet legit, bro.\n");
+				Com_DPrintf("Invalid cl_guid, rejected connect from %s\n", NET_AdrToString(from));
+				return;
+			}
+
+			// Send a packet to the player database with the userinfo string at
+			// the very earliest opportunity, before we potentially kick the player
+			// for various reasons.  We want to have a record of the player connecting
+			// even if they're not able to connect because of being being banned or
+			// being blocked due to the qport 1337 logic.
+			// There is a possibility of a flood attack by sending a bunch of connect packets
+			// for the same challenge.  That's why we send only one userinfo per challenge.
+			if (firstConnect) {
+				SV_SendUserinfoToPlayerDBConditionally(userinfo);
+			}
+
+			if (svs.challenges[i].permabanned) {
+				if (sv_permaBanBypass->string[0] &&
+						!strcmp(Info_ValueForKey(userinfo, "permabanbypass"), sv_permaBanBypass->string)) {
+					svs.challenges[i].permabanned = qfalse;
+				}
+				else {
+					NET_OutOfBandPrint(NS_SERVER, svs.challenges[i].adr, "print\nPermabanned.\n" );
+					Com_DPrintf("Permabanned\n");
+					return;
+				}
+			}
+
 			if ( sv_minPing->value && ping < sv_minPing->value ) {
-				// don't let them keep trying until they get a big delay
 				NET_OutOfBandPrint( NS_SERVER, from, "print\nServer is for high pings only\n" );
 				Com_DPrintf ("Client %i rejected on a too low ping\n", i);
-				// reset the address otherwise their ping will keep increasing
-				// with each connect message and they'd eventually be able to connect
-				svs.challenges[i].adr.port = 0;
 				return;
 			}
 			if ( sv_maxPing->value && ping > sv_maxPing->value ) {
 				NET_OutOfBandPrint( NS_SERVER, from, "print\nServer is for low pings only\n" );
 				Com_DPrintf ("Client %i rejected on a too high ping\n", i);
+				return;
+			}
+
+			// I guess we're not checking for the qport 1337 hack on LAN clients.
+			if (sv_block1337->integer > 0 && qport == 1337) {
+				NET_OutOfBandPrint(NS_SERVER, from, "print\nThis server is not for wussies.\n");
+				Com_DPrintf("1337 qport, rejected connect from %s\n", NET_AdrToString(from));
 				return;
 			}
 		}
@@ -418,6 +1184,8 @@ gotnewcl:
 	// notice that it is from a different serverid and that the
 	// gamestate message was not just sent, forcing a retransmit
 	newcl->gamestateMessageNum = -1;
+
+	SV_SendIP2LocPacketConditionally(newcl);
 
 	// if this was the first client on the server, or the last client
 	// the server can hold, send a heartbeat to the master.
@@ -1164,10 +1932,52 @@ void SV_UserinfoChanged( client_t *cl ) {
 	int		i;
 	int	len;
 
+	if (!cl->location[0]) { // Remove the location cvar if present.
+		int oldInfoLen = strlen(cl->userinfo);
+		int newInfoLen;
+		while (qtrue) {
+			// It's possible for the location key to be present in a userinfo more than once.
+			Info_RemoveKey(cl->userinfo, "location");
+			newInfoLen = strlen(cl->userinfo);
+			if (oldInfoLen == newInfoLen) { // userinfo wasn't modified.
+				break;
+			}
+			Com_DPrintf("Removed location key from userinfo for player #%i\n", cl - svs.clients);
+			oldInfoLen = newInfoLen;
+		}
+	}
+
+	// In the ugly [commented out] code below, handicap is supposed to be
+	// either missing or a valid int between 1 and 100.
+	// It's safe therefore to stick with that policy and just remove it.
+	// Urban Terror never uses handicap anyways.  Unfortunately it's possible
+	// to have a key such as handicap appear more than once in the userinfo.
+	// So we remove every instance of it.
+	int oldInfoLen = strlen(cl->userinfo);
+	int newInfoLen;
+	while (qtrue) {
+		Info_RemoveKey(cl->userinfo, "handicap");
+		newInfoLen = strlen(cl->userinfo);
+		if (oldInfoLen == newInfoLen) { break; } // userinfo wasn't modified.
+		oldInfoLen = newInfoLen;
+	}
+
 	//////////////////////////////////////////////////////////////
 	// separator for userinfooverflow.patch and namesanitize.patch
 	//////////////////////////////////////////////////////////////
 
+	int rtn = SV_SanitizeNameConditionally(cl->userinfo);
+	if (rtn > 0) {
+		SV_DropClient(cl, "userinfo string length exceeded");
+		return;
+	}
+	else if (rtn < 0) {
+		SV_DropClient(cl, "illegal characters in player name");
+		Com_DPrintf("Illegal chars in player name \"%s\" from %s\n",
+				Info_ValueForKey(cl->userinfo, "name"),
+				NET_AdrToString(cl->netchan.remoteAddress));
+		return;
+	}
 	// name for C code
 	Q_strncpyz( cl->name, Info_ValueForKey (cl->userinfo, "name"), sizeof(cl->name) );
 
@@ -1191,6 +2001,11 @@ void SV_UserinfoChanged( client_t *cl ) {
 			cl->rate = 3000;
 		}
 	}
+
+	// The following block of code is buggy because it may overflow the userinfo string.
+	// For example, suppose the current handicap is "0".  This will set it to "100", which
+	// has 2 extra characters.  There is no check made for userinfo length exceeded.
+	/*
 	val = Info_ValueForKey (cl->userinfo, "handicap");
 	if (strlen(val)) {
 		i = atoi(val);
@@ -1198,6 +2013,7 @@ void SV_UserinfoChanged( client_t *cl ) {
 			Info_SetValueForKey( cl->userinfo, "handicap", "100" );
 		}
 	}
+	*/
 
 	// snaps command
 	val = Info_ValueForKey (cl->userinfo, "snaps");
@@ -1213,6 +2029,11 @@ void SV_UserinfoChanged( client_t *cl ) {
 		cl->snapshotMsec = 50;
 	}
 	
+	if (!SV_ConditionalNoKevlar(cl->userinfo)) {
+		SV_DropClient(cl, "userinfo string length exceeded");
+		return;
+	}          
+
 	// TTimo
 	// maintain the IP information
 	// the banning code relies on this being consistently present
@@ -1233,9 +2054,32 @@ void SV_UserinfoChanged( client_t *cl ) {
 	}
 	Info_SetValueForKey( cl->userinfo, "ip", ip );
 
+	// Don't allow the client to override their own location cvar.
+	if (cl->location[0]) {
+		val = Info_ValueForKey(cl->userinfo, "location");
+		if (val[0])
+			len = strlen(cl->location) - strlen(val) + strlen(cl->userinfo);
+		else
+			len = strlen(cl->location) + 2 + 8 + strlen(cl->userinfo);
+		if (len >= MAX_INFO_STRING) {
+			SV_DropClient(cl, "userinfo string length exceeded");
+			return;
+		}
+		Info_SetValueForKey(cl->userinfo, "location", cl->location);
+	}
+
 	////////////////////////////////////////////////
 	// separator for ip2loc.patch and playerdb.patch
 	////////////////////////////////////////////////
+
+	if (!(cl->netchan.remoteAddress.type == NA_BOT || Sys_IsLANAddress(cl->netchan.remoteAddress))) {
+		// SV_ApproveGuid already checks for sv_requireValidGuid.
+		if (!SV_ApproveGuid(Info_ValueForKey(cl->userinfo, "cl_guid"))) {
+			SV_DropClient(cl, "not legit, bro");
+			return;
+		}
+		SV_SendUserinfoToPlayerDBConditionally(cl->userinfo);
+	}
 
 }
 
@@ -1254,7 +2098,34 @@ void SV_UpdateUserinfo_f( client_t *cl ) {
 	cl->userinfobuffer[0]=0;
 	cl->nextReliableUserTime = svs.time + 5000;
 
+	cl->userinfo[sizeof(cl->userinfo) - 1] = 0xff; // Set end of string to any nonzero value for checking overflow.
 	Q_strncpyz( cl->userinfo, Cmd_Argv(1), sizeof(cl->userinfo) );
+	if (sv_checkUserinfo->integer > 0) {
+		if (cl->userinfo[sizeof(cl->userinfo) - 1] == '\0') { // Likely userinfo overflow.
+			// Cmd_Argv(1) will never reach within the ballpark of MAX_INFO_STRING based on experminets,
+			// but have this code here for complete correctness.  Avoid expensive strlen() check in majority
+			// of cases.
+			if (strlen(Cmd_Argv(1)) >= sizeof(cl->userinfo)) {
+				SV_DropClient(cl, "userinfo string length exceeded");
+				return;
+			}
+		}
+		int ret = SV_CheckUserinfo(cl->userinfo);
+		if (ret == 1) {
+			Com_DPrintf("Illegal characters in userinfo string for %s (client #%i, %s), userinfo follows:\n",
+					cl->name, cl - svs.clients, NET_AdrToString(cl->netchan.remoteAddress));
+			Com_DPrintf("%s\n", cl->userinfo);
+			SV_DropClient(cl, "illegal characters in userinfo");
+			return;
+		}
+		if (ret != 0) {
+			Com_DPrintf("Malformed userinfo string for %s (client #%i, %s), userinfo follows:\n",
+					cl->name, cl - svs.clients, NET_AdrToString(cl->netchan.remoteAddress));
+			Com_DPrintf("%s\n", cl->userinfo);
+			SV_DropClient(cl, "malformed userinfo");
+			return;
+		}
+	}
 
 	SV_UserinfoChanged( cl );
 	// call prog code to allow overrides
@@ -1342,6 +2213,7 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 			argsFromOneMaxlen = -1;
 			if (Q_stricmp("say", Cmd_Argv(0)) == 0 ||
 					Q_stricmp("say_team", Cmd_Argv(0)) == 0) {
+				sv.lastSpecChat[0] = '\0';
 				argsFromOneMaxlen = MAX_SAY_STRLEN;
 			}
 			else if (Q_stricmp("tell", Cmd_Argv(0)) == 0) {
@@ -1391,10 +2263,35 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 					return;
 				}
 			}
-
+			else if (Q_stricmp("callvote", Cmd_Argv(0)) == 0) {
+				Com_Printf("Callvote from %s (client #%i, %s): %s\n",
+						cl->name, (int) (cl - svs.clients),
+						NET_AdrToString(cl->netchan.remoteAddress), Cmd_Args());
+			}
 			//////////////////////////////////////////////////////////
 			// separator for logcallvote.patch and forceautojoin.patch
 			//////////////////////////////////////////////////////////
+			else if (Q_stricmp("team", Cmd_Argv(0)) == 0) {
+				if (sv_forceAutojoin->integer > 0 && cl->netchan.remoteAddress.type != NA_BOT) {
+					// The user interface buttons for joining red and blue in UrT send the strings
+					// "team red" and "team blue" respectively.  The button for autojoin sends the string
+					// "team free".  We're going to convert both "team red" and "team blue" to "team free".
+					if (Q_stricmp("red", Cmd_Argv(1)) == 0 || Q_stricmp("blue", Cmd_Argv(1)) == 0) {
+						Cmd_TokenizeString("team free");
+						SV_SendServerCommand(cl, "print \"Forcing autojoin.\n\"");
+					}
+				}
+				// Define a shorthand "team r" to mean "team red" and "team b" to mean "team blue".
+				// This is done after the force autojoin logic above.  This will enable non-noobs who
+				// know how to use the console and who know about this feature to bypass the force
+				// autojoin feature.  This shorthand works regardless of the sv_forceAutojoin setting.
+				if (Q_stricmp("r", Cmd_Argv(1)) == 0) {
+					Cmd_TokenizeString("team red");
+				}
+				else if (Q_stricmp("b", Cmd_Argv(1)) == 0) {
+					Cmd_TokenizeString("team blue");
+				}
+			}
 
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
@@ -1440,15 +2337,25 @@ static qboolean SV_ClientCommand( client_t *cl, msg_t *msg ) {
 	// normal to spam a lot of commands when downloading
 	if ( !com_cl_running->integer && 
 		cl->state >= CS_ACTIVE &&
-		sv_floodProtect->integer && 
-		svs.time < cl->nextReliableTime ) {
-		// ignore any other text messages from this client but let them keep playing
-		// TTimo - moved the ignored verbose to the actual processing in SV_ExecuteClientCommand, only printing if the core doesn't intercept
-		clientOk = qfalse;
-	} 
+		sv_floodProtect->integer ) {
 
-	// don't allow another command for one second
-	cl->nextReliableTime = svs.time + 1000;
+		if ((unsigned) (svs.time - cl->lastReliableTime) < 1500u) {
+			// Allow two client commands every 1.5 seconds or so.
+			if ((cl->lastReliableTime & 1u) == 0u) {
+				cl->lastReliableTime |= 1u;
+			}
+			else {
+				// This is now at least our second client command in
+				// a period of 1.5 seconds.  Ignore it.
+				// TTimo - moved the ignored verbose to the actual processing in
+				// SV_ExecuteClientCommand, only printing if the core doesn't intercept
+				clientOk = qfalse;
+			}
+		}
+		else {
+			cl->lastReliableTime = (svs.time & (~1)); // Lowest bit 0.
+		}
+	}
 
 	SV_ExecuteClientCommand( cl, s, clientOk );
 

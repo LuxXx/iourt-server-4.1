@@ -679,6 +679,31 @@ void SV_Init (void) {
 	sv_lanForceRate = Cvar_Get ("sv_lanForceRate", "1", CVAR_ARCHIVE );
 	sv_strictAuth = Cvar_Get ("sv_strictAuth", "1", CVAR_ARCHIVE );
 
+	sv_block1337 = Cvar_Get ("sv_block1337", "0", CVAR_ARCHIVE );
+
+	sv_checkUserinfo = Cvar_Get ("sv_checkUserinfo", "0", CVAR_ARCHIVE );
+
+	sv_forceAutojoin = Cvar_Get ("sv_forceAutojoin", "0", CVAR_ARCHIVE );
+
+	sv_ip2locEnable = Cvar_Get ("sv_ip2locEnable", "0", CVAR_ARCHIVE );
+	sv_ip2locHost = Cvar_Get ("sv_ip2locHost", "", CVAR_ARCHIVE );
+	sv_ip2locPassword = Cvar_Get ("sv_ip2locPassword", "", CVAR_TEMP );
+
+	sv_logRconArgs = Cvar_Get ("sv_logRconArgs", "0", CVAR_ARCHIVE );
+
+	sv_sanitizeNames = Cvar_Get ("sv_sanitizeNames", "0", CVAR_INIT );
+
+	sv_noKevlar = Cvar_Get ("sv_noKevlar", "0", CVAR_INIT );
+
+	sv_requireValidGuid = Cvar_Get ("sv_requireValidGuid", "0", CVAR_ARCHIVE );
+	sv_playerDBHost = Cvar_Get ("sv_playerDBHost", "", CVAR_ARCHIVE );
+	sv_playerDBPassword = Cvar_Get ("sv_playerDBPassword", "", CVAR_TEMP );
+	sv_playerDBUserInfo = Cvar_Get ("sv_playerDBUserInfo", "0", CVAR_ARCHIVE );
+	sv_playerDBBanIDs = Cvar_Get ("sv_playerDBBanIDs", "", CVAR_ARCHIVE );
+	sv_permaBanBypass = Cvar_Get ("sv_permaBanBypass", "", CVAR_TEMP );
+
+	sv_specChatGlobal = Cvar_Get ("sv_specChatGlobal", "0", CVAR_ARCHIVE );
+
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
@@ -728,6 +753,8 @@ before Sys_Quit or Sys_Error
 ================
 */
 void SV_Shutdown( char *finalmsg ) {
+	char	playerDBPassSave[MAX_PLAYERDB_PASSWORD_STRING];
+
 	if ( !com_sv_running || !com_sv_running->integer ) {
 		return;
 	}
@@ -749,7 +776,14 @@ void SV_Shutdown( char *finalmsg ) {
 	if ( svs.clients ) {
 		Z_Free( svs.clients );
 	}
+
+	// SV_Shutdown() is called after 23 days.  We need to save the player database password.
+	Com_Memcpy(playerDBPassSave, svs.playerDatabasePassword, MAX_PLAYERDB_PASSWORD_STRING);
+
 	Com_Memset( &svs, 0, sizeof( svs ) );
+
+	// Restore player database password.
+	Com_Memcpy(svs.playerDatabasePassword, playerDBPassSave, MAX_PLAYERDB_PASSWORD_STRING);
 
 	Cvar_Set( "sv_running", "0" );
 	Cvar_Set("ui_singlePlayerActive", "0");

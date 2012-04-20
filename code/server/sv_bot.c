@@ -59,6 +59,10 @@ int SV_BotAllocateClient(void) {
 		return -1;
 	}
 
+	// It's safest to null out the entire client_t structure, even though our immediate purpose
+	// is only to make sure that cl->location is empty.
+	Com_Memset(cl, 0, sizeof(client_t));
+
 	cl->gentity = SV_GentityNum( i );
 	cl->gentity->s.number = i;
 	cl->state = CS_ACTIVE;

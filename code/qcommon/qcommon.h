@@ -166,6 +166,7 @@ qboolean	NET_CompareBaseAdr (netadr_t a, netadr_t b);
 qboolean	NET_IsLocalAddress (netadr_t adr);
 const char	*NET_AdrToString (netadr_t a);
 qboolean	NET_StringToAdr ( const char *s, netadr_t *a);
+qboolean	NET_IsIP ( const char *s);
 qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, msg_t *net_message);
 void		NET_Sleep(int msec);
 
@@ -405,6 +406,7 @@ char	*Cmd_Argv (int arg);
 void	Cmd_ArgvBuffer( int arg, char *buffer, int bufferLength );
 char	*Cmd_Args (void);
 char	*Cmd_ArgsFrom( int arg );
+char	*Cmd_ArgsFromRaw( int arg );
 void	Cmd_ArgsBuffer( char *buffer, int bufferLength );
 char	*Cmd_Cmd (void);
 void	Cmd_Args_Sanitize( void );
@@ -747,8 +749,10 @@ sysEvent_t	Com_GetSystemEvent( void );
 char		*CopyString( const char *in );
 void		Info_Print( const char *s );
 
+qboolean	in_redirect;
 void		Com_BeginRedirect (char *buffer, int buffersize, void (*flush)(char *));
 void		Com_EndRedirect( void );
+
 void 		QDECL Com_Printf( const char *fmt, ... ) __attribute__ ((format (printf, 1, 2)));
 void 		QDECL Com_DPrintf( const char *fmt, ... ) __attribute__ ((format (printf, 1, 2)));
 void 		QDECL Com_Error( int code, const char *fmt, ... ) __attribute__ ((format (printf, 2, 3)));
