@@ -337,6 +337,10 @@ extern	cvar_t	*sv_minKillHealth;
 
 extern	cvar_t	*sv_CheckDRDoS;
 
+extern	cvar_t	*sv_disableWeapDrop;
+extern	cvar_t	*sv_disableItemDrop;
+extern	cvar_t	*sv_disableRadioChat;
+
 //===========================================================
 
 //

@@ -2309,7 +2309,24 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_SendServerCommand(cl, "print \"You need a minimum of %i percent health to change your team.\n\"", sv_minKillHealth->integer);
                 return;
             }
-            
+            if (sv_disableItemDrop->integer > 0 &&
+                !Q_stricmp("ut_itemdrop", Cmd_Argv(0)))
+            {
+                SV_SendServerCommand(cl,"print \"This server does not allow dropping items.\n\"");
+                return;
+            }
+            if (sv_disableWeapDrop->integer > 0 &&
+                !Q_stricmp("ut_weapdrop", Cmd_Argv(0)))
+            {
+                SV_SendServerCommand(cl,"print \"This server does not allow dropping weapons.\n\"");
+                return;
+            }
+            if (sv_disableRadioChat->integer > 0 &&
+                !Q_stricmp("ut_radio", Cmd_Argv(0)))
+            {
+                SV_SendServerCommand(cl, "print \"This server does not allow radio chat.\n\"");
+                return;
+            }
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}
