@@ -351,6 +351,21 @@ intptr_t QDECL VM_DllSyscall( intptr_t arg, ... ) {
 
 /*
 =================
+StaminaQVMHack
+// by delroth
+// for those who does not use a modded qvm
+=================
+*/
+#define 	SPRINTOFFSET 	0x103C8
+#define 	JUMPOFFSET 	0x114C5
+#define 	CROUCHOFFSET 	0x14399
+static void VMhook_noStamina( byte * code )
+{
+	code[CROUCHOFFSET] = code[JUMPOFFSET] = code[SPRINTOFFSET] = OP_POP;
+}
+
+/*
+=================
 VM_LoadQVM
 
 Load a .qvm file
@@ -362,7 +377,9 @@ vmHeader_t *VM_LoadQVM( vm_t *vm, qboolean alloc ) {
 	int					i;
 	char				filename[MAX_QPATH];
 	vmHeader_t	*header;
-
+    
+    cvar_t *sv_noStamina;
+    
 	// load the image
 	Com_sprintf( filename, sizeof(filename), "vm/%s.qvm", vm->name );
 	Com_Printf( "Loading vm file %s...\n", filename );
@@ -453,7 +470,12 @@ vmHeader_t *VM_LoadQVM( vm_t *vm, qboolean alloc ) {
 			*(int *)(vm->jumpTableTargets + i) = LittleLong( *(int *)(vm->jumpTableTargets + i ) );
 		}
 	}
-
+    
+    sv_noStamina = Cvar_Get ( "sv_noStamina", "0", CVAR_LATCH | CVAR_ARCHIVE );
+	if ( sv_noStamina->integer > 0 && !Q_stricmp (vm->name, "qagame") ) {
+        VMhook_noStamina ( ( byte * ) header + header->codeOffset );
+    }
+    
 	return header;
 }
 
