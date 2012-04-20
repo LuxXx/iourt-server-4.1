@@ -136,7 +136,8 @@ typedef enum {
 	NA_BAD,					// an address lookup failed
 	NA_LOOPBACK,
 	NA_BROADCAST,
-	NA_IP
+    NA_IP,
+	NA_IP6
 } netadrtype_t;
 
 typedef enum {
@@ -148,6 +149,7 @@ typedef struct {
 	netadrtype_t	type;
 
 	byte	ip[4];
+    byte ip6[16];
 
 	unsigned short	port;
 } netadr_t;
