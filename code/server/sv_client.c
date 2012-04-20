@@ -2640,6 +2640,11 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_DropClient( cl, sv_CustomDisconnectMessage->string );
                 return;
             }
+            if (!Q_stricmp("svinfo", Cmd_Argv(0)))
+            {
+                SV_SendServerCommand(cl,"print \"Version: %s | %s\n\"",Cvar_VariableString("version"),Cvar_VariableString("g_modversion"));
+                return;
+            }
             
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
