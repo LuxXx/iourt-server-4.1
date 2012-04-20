@@ -757,6 +757,8 @@ void SV_Init (void) {
 	str_blueteamwins = Cvar_Get("str_blueteamwins", "^4Blue^7 team wins", CVAR_ARCHIVE);
 	str_redteamwins = Cvar_Get("str_redteamwins", "^1Red^7 team wins", CVAR_ARCHIVE);
     
+    sv_mutewords = Cvar_Get("sv_mutewords", "", CVAR_ARCHIVE);
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

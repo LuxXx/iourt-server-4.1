@@ -379,6 +379,8 @@ extern	cvar_t	*str_youvebeenslapped;
 extern	cvar_t	*str_blueteamwins;
 extern	cvar_t	*str_redteamwins;
 
+extern	cvar_t	*sv_mutewords;
+
 //===========================================================
 
 //

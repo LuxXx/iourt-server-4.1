@@ -128,6 +128,8 @@ cvar_t	*str_youvebeenslapped;
 cvar_t	*str_blueteamwins;
 cvar_t	*str_redteamwins;
 
+cvar_t	*sv_mutewords;
+
 /*
 =============================================================================
 
@@ -427,6 +429,33 @@ void str_CensorThisString( char *s ) {
 	
 }
 
+//  mutebadword functions
+int mbw_CheckBadWord(char sub[], char s[]) {
+	int i, j;
+	for (i=0; s[i]; i++) {
+		for (j=0; sub[j] && tolower(sub[j]) == tolower(s[i+j]); j++);
+		if (!sub[j]) {
+			return i;
+		}
+	}
+	return 0;
+}
+int mbw_BadWordMute(char* msg) {
+    int i;
+    char string[1024];
+    strcpy(string,sv_mutewords->string);
+    char * cut;
+	cut = strtok (string,",");
+    while (cut != NULL)
+    {
+        if (i = lux_CheckBadWord(cut,msg) != -1) {
+            return 1;
+        }
+        cut = strtok (NULL, ",");
+    }
+    return 0;
+}
+
 /*
 =================
 SV_SendServerCommand
@@ -487,6 +516,15 @@ void QDECL SV_SendServerCommand(client_t *cl, const char *fmt, ...) {
 		cl = NULL;
 	}
 
+    if (mbw_CheckBadWord("connected", (char *) message) == -1) { // fix connect bug
+        
+        if (mbw_BadWordMute((char *) message) == 1 && strlen(sv_mutewords->string) != 0) {
+            cl->muted = qtrue;
+            SV_SendServerCommand(cl, "print \"The server muted you: you cannot talk. Reason: %s\"\n", "Bad Word");
+            return;
+        }
+    }
+    
     /*
     =================
     Use the modified strings
