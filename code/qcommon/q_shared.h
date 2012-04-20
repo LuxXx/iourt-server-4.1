@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
-#define PRODUCT_NAME            "ioq3"
+#define PRODUCT_NAME            "ioq3-urtlux"
 #define PRODUCT_VERSION         "1.35urt"
 
 #ifdef SVN_VERSION
