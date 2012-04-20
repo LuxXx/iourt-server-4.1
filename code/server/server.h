@@ -181,7 +181,9 @@ typedef struct client_s {
 	netchan_buffer_t **netchan_end_queue;
 
 	int				oldServerTime;
-	qboolean			csUpdated[MAX_CONFIGSTRINGS+1];	
+	qboolean			csUpdated[MAX_CONFIGSTRINGS+1];
+	
+    qboolean			muted;
 
 	char				location[MAX_LOCATION_STRING];
 	char				ip2locChallengeStr[9];	// 8 character hexadecimal string

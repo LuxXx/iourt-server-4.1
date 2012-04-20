@@ -2327,6 +2327,15 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_SendServerCommand(cl, "print \"This server does not allow radio chat.\n\"");
                 return;
             }
+            if (cl->muted && (!Q_stricmp("say", Cmd_Argv(0)) ||
+                              !Q_stricmp("say_team", Cmd_Argv(0)) ||
+                              !Q_stricmp("info", Cmd_Argv(0)) ||
+                              !Q_stricmp("tell", Cmd_Argv(0)) ||
+                              !Q_stricmp("ut_radio", Cmd_Argv(0)) ||
+                              !Q_stricmp("callvote", Cmd_Argv(0)))) {
+				SV_SendServerCommand(cl, "print \"You are currently muted and may not perform that action.\n\"");
+				return;
+			}
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}

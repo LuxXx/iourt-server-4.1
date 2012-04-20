@@ -538,6 +538,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 				// was connected before the level change
 				SV_DropClient( &svs.clients[i], denied );
 			} else {
+                svs.clients[i].muted = qfalse;
 				if( !isBot ) {
 					// when we get the next packet from a connected client,
 					// the new gamestate will be sent
