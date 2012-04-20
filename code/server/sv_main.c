@@ -136,6 +136,8 @@ cvar_t	*sv_badRconMessage;
 
 cvar_t	*sv_disableDefaultMaps;
 
+cvar_t	*sv_regainStamina;
+
 /*
 =============================================================================
 
@@ -1967,6 +1969,41 @@ qboolean SV_CheckPaused( void ) {
 
 /*
 ==================
+SV_ResetStamina
+==================
+*/
+static void SV_ResetStamina(void) {
+    
+    int i;
+    
+    client_t *cl;
+    
+    playerState_t *ps;
+    
+    for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++)
+        
+    {
+        
+        if (cl->state != CS_ACTIVE) {
+            continue;
+        }
+        ps = SV_GameClientNum(i);
+        if (!ps->velocity[0] && !ps->velocity[1] && !ps->velocity[2])
+        {
+            if (++cl->nospeedCount >= sv_regainStamina->integer)
+            {
+                *((int *) (gvm->dataBase + 0x11194 + i * 4220)) = 30000;
+                cl->nospeedCount = 0;
+            }
+        }
+        else
+            cl->nospeedCount = 0;
+    }
+}
+
+
+/*
+==================
 SV_Frame
 
 Player movement occurs as a result of packet events, which
@@ -2090,6 +2127,12 @@ void SV_Frame( int msec ) {
 	// send messages back to the clients
 	SV_SendClientMessages();
 
+    // reset stamina of players with zero velocity
+    
+    if (sv_regainStamina->integer > 0) {
+        SV_ResetStamina();
+    }
+    
 	// send a heartbeat to the master if needed
 	SV_MasterHeartbeat();
 

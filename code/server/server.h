@@ -187,7 +187,8 @@ typedef struct client_s {
 
     // MaJ -- A place to store what type of mod the user is. 0 for none, otherwise, (mod slot number + 1)
     int mod_slot;
-
+    int nospeedCount;           // number of frames since the player has zero velocity
+    
 	char				location[MAX_LOCATION_STRING];
 	char				ip2locChallengeStr[9];	// 8 character hexadecimal string
 } client_t;
@@ -386,6 +387,8 @@ extern	cvar_t	*sv_attractplayers;
 extern	cvar_t	*sv_badRconMessage;
 
 extern	cvar_t	*sv_disableDefaultMaps;
+
+extern	cvar_t *sv_regainStamina;
 
 //===========================================================
 
