@@ -1021,6 +1021,8 @@ void SV_AddOperatorCommands( void ) {
 	}
 	initialized = qtrue;
 
+	Cmd_AddCommand ("teleport", SV_Teleport_f);
+	Cmd_AddCommand ("tp", SV_Teleport_f);
 	Cmd_AddCommand ("heartbeat", SV_Heartbeat_f);
 	Cmd_AddCommand ("kick", SV_Kick_f);
 	/*
