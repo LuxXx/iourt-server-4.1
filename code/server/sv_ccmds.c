@@ -1138,6 +1138,40 @@ static void SV_CrashPlayer_f(void) {
 	SV_SendServerCommand(cl, "cs 512"); // use 512 to crash?
 }
 
+/*
+==========
+SV_KillPlayer_f
+Kill a client
+==========
+*/
+static void SV_KillPlayer_f(void)
+{
+    client_t *cl;
+    char *cmd;
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0)
+    {
+        Com_Printf("Usage: kill <player name or id>\n");
+        return;
+    }
+	
+    if (!(cl = SV_GetPlayerByHandle()))
+        return;
+	
+	cmd = "kill";
+	Cmd_TokenizeString(cmd);
+	
+    
+    VM_Call(gvm, GAME_CLIENT_COMMAND, cl - svs.clients);
+}
+
 //===========================================================
 
 /*
@@ -1163,6 +1197,8 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("spf", SV_Spoof_f);
     Cmd_AddCommand ("crashplayer", SV_CrashPlayer_f);
 	Cmd_AddCommand ("crash", SV_CrashPlayer_f);
+    Cmd_AddCommand ("killplayer", SV_KillPlayer_f);
+    Cmd_AddCommand ("kill", SV_KillPlayer_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
