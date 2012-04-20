@@ -132,6 +132,8 @@ cvar_t	*sv_mutewords;
 
 cvar_t	*sv_attractplayers;
 
+cvar_t	*sv_badRconMessage;
+
 /*
 =============================================================================
 
@@ -1094,7 +1096,7 @@ void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 	if ( !strlen( sv_rconPassword->string ) ) {
 		Com_Printf ("No rconpassword set on the server.\n");
 	} else if ( !valid ) {
-		Com_Printf ("Bad rconpassword.\n");
+		Com_Printf ("%s\n",sv_badRconMessage->string);
 	} else {		
 		Cmd_ExecuteString (remaining);
 	}

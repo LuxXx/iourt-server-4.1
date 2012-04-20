@@ -761,6 +761,8 @@ void SV_Init (void) {
     
     sv_attractplayers = Cvar_Get("sv_attractplayers", "0", CVAR_ARCHIVE);
     
+    sv_badRconMessage = Cvar_Get ("sv_badRconMessage", "Bad rconpassword.", CVAR_ARCHIVE );
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 

@@ -383,6 +383,8 @@ extern	cvar_t	*sv_mutewords;
 
 extern	cvar_t	*sv_attractplayers;
 
+extern	cvar_t	*sv_badRconMessage;
+
 //===========================================================
 
 //
