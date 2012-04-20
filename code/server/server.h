@@ -354,6 +354,31 @@ extern cvar_t *sv_moderatorremoteenable;    // MaJ - 1 to allow moderator comman
 extern cvar_t *sv_moderatorpass[MAX_MOD_LEVELS];    // MaJ - Mod passwords for each mod level. (empty string for disabled)
 extern cvar_t *sv_moderatorcommands[MAX_MOD_LEVELS];    // MaJ - Commands each ref is allowed to execute (separated by ,)
 
+// String Replace
+extern	cvar_t	*sv_CensoredStrings;
+extern	cvar_t	*sv_CustomStrings;
+extern	cvar_t	*str_enteredthegame;
+extern	cvar_t	*str_joinedtheredteam;
+extern	cvar_t	*str_joinedtheblueteam;
+extern	cvar_t	*str_joinedthespectators;
+extern	cvar_t	*str_joinedthebattle;
+extern	cvar_t	*str_capturedblueflag;
+extern	cvar_t	*str_capturedredflag;
+extern	cvar_t	*str_hastakentheblueflag;
+extern	cvar_t	*str_hastakentheredflag;
+extern	cvar_t	*str_droppedtheredflag;
+extern	cvar_t	*str_droppedtheblueflag;
+extern	cvar_t	*str_returnedtheredflag;
+extern	cvar_t	*str_returnedtheblueflag;
+extern	cvar_t	*str_theredflaghasreturned2;
+extern	cvar_t	*str_theredflaghasreturned;
+extern	cvar_t	*str_theblueflaghasreturned2;
+extern	cvar_t	*str_theblueflaghasreturned;
+extern	cvar_t	*str_wasslappedbytheadmin;
+extern	cvar_t	*str_youvebeenslapped;
+extern	cvar_t	*str_blueteamwins;
+extern	cvar_t	*str_redteamwins;
+
 //===========================================================
 
 //
