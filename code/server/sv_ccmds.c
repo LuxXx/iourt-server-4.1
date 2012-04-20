@@ -345,6 +345,7 @@ SV_Kick_f
 Kick a user off of the server  FIXME: move to game
 ==================
 */
+/*
 static void SV_Kick_f( void ) {
 	client_t	*cl;
 	int			i;
@@ -396,6 +397,7 @@ static void SV_Kick_f( void ) {
 	SV_DropClient( cl, "was kicked" );
 	cl->lastPacketTime = svs.time;	// in case there is a funny zombie
 }
+*/
 
 /*
 ==================
@@ -1006,6 +1008,71 @@ static void SV_Teleport_f(void)
     VectorClear(ps->velocity);
 }
 
+/*
+==================
+SV_Kick_f
+Kick a user off of the server  FIXME: move to game
+arg2 is reason
+==================
+*/
+static void SV_Kick_f( void ) {
+	client_t	*cl;
+	int			i;
+	char		*reason = "was kicked";
+	
+	// make sure server is running
+	if ( !com_sv_running->integer ) {
+		Com_Printf( "Server is not running.\n" );
+		return;
+	}
+	
+	if ( Cmd_Argc() < 2 || Cmd_Argc() > 3 ) {
+		Com_Printf ("Usage: kick <player> <reason>\nkick all = kick everyone\nkick allbots = kick all bots\n");
+		return;
+	}
+	
+	
+	if ( Cmd_Argc() == 3 ) {
+		reason = Cmd_Argv(2);
+	}
+	
+	cl = SV_GetPlayerByHandle();
+	if ( !cl ) {
+		if ( !Q_stricmp(Cmd_Argv(1), "all") ) {
+			for ( i=0, cl=svs.clients ; i < sv_maxclients->integer ; i++,cl++ ) {
+				if ( !cl->state ) {
+					continue;
+				}
+				if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
+					continue;
+				}
+				SV_DropClient( cl, reason );
+				cl->lastPacketTime = svs.time;	// in case there is a funny zombie
+			}
+		}
+		else if ( !Q_stricmp(Cmd_Argv(1), "allbots") ) {
+			for ( i=0, cl=svs.clients ; i < sv_maxclients->integer ; i++,cl++ ) {
+				if ( !cl->state ) {
+					continue;
+				}
+				if( cl->netchan.remoteAddress.type != NA_BOT ) {
+					continue;
+				}
+				SV_DropClient( cl, reason );
+				cl->lastPacketTime = svs.time;	// in case there is a funny zombie
+			}
+		}
+		return;
+	}
+	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
+		SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
+		return;
+	}
+    
+	SV_DropClient( cl, reason );
+	cl->lastPacketTime = svs.time;	// in case there is a funny zombie
+}
+
 //===========================================================
 
 /*
@@ -1025,6 +1092,8 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("tp", SV_Teleport_f);
 	Cmd_AddCommand ("heartbeat", SV_Heartbeat_f);
 	Cmd_AddCommand ("kick", SV_Kick_f);
+    Cmd_AddCommand ("rkick", SV_Kick_f);
+    Cmd_AddCommand ("reasonkick", SV_Kick_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
