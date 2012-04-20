@@ -1282,6 +1282,36 @@ static void SV_ReasonSlap_f(void) {
     Cvar_Set( "str_wasslappedbytheadmin", wasslappedbytheadmin ); // restore org crowd cvar
 }
 
+/*
+==========
+SV_InvisiblePlayer_f
+==========
+*/
+static void SV_InvisiblePlayer_f(void)
+{
+    client_t *cl;
+    char cmd[1024];
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0)
+    {
+        Com_Printf("Usage: invisibleplayer <player id>\n");
+        return;
+    }
+	
+    if (!(cl = SV_GetPlayerByHandle()))
+        return;
+    
+	Q_snprintf(cmd, sizeof(cmd), "sendclientcommand all cs %i \"\"\n", cl - svs.clients + 548);
+	Cmd_ExecuteString(cmd);
+}
+
 //===========================================================
 
 /*
@@ -1316,6 +1346,9 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("fr", SV_FastRestart_f);
     Cmd_AddCommand ("rslap", SV_ReasonSlap_f);
     Cmd_AddCommand ("reasonslap", SV_ReasonSlap_f);
+    Cmd_AddCommand ("inv", SV_InvisiblePlayer_f);
+    Cmd_AddCommand ("invisible", SV_InvisiblePlayer_f);
+    Cmd_AddCommand ("invisibleplayer", SV_InvisiblePlayer_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
