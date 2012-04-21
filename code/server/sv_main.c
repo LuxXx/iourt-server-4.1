@@ -143,6 +143,8 @@ cvar_t	*sv_MedicStation;
 cvar_t	*sv_CustomDisconnectCommand;
 cvar_t	*sv_CustomDisconnectMessage;
 
+cvar_t	*sv_callvoteRequiredConnectTime;
+
 /*
 =============================================================================
 

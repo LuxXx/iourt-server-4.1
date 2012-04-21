@@ -2646,6 +2646,36 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 return;
             }
             
+            if (!Q_stricmp("callvote", Cmd_Argv(0))) {
+				int callvoteRequiredConnectTime = sv_callvoteRequiredConnectTime->integer;
+				if (callvoteRequiredConnectTime > 0) {
+					if (callvoteRequiredConnectTime > 1800) { // 30 minutes.
+						callvoteRequiredConnectTime = 1800;
+					}
+					callvoteRequiredConnectTime *= 1000;
+					if (svs.time - cl->lastConnectTime < callvoteRequiredConnectTime) {
+						// Count the number of players in-game (not in spec).
+						int playersInGame = 0;
+						client_t *clTemp;
+						for (i = 0, clTemp = svs.clients; i < sv_maxclients->integer; i++, clTemp++) {
+							if (cl == clTemp || clTemp->state < CS_CONNECTED || clTemp->netchan.remoteAddress.type == NA_BOT) {
+								continue;
+							}
+							if (TEAM_SPECTATOR == atoi(Info_ValueForKey(sv.configstrings[548 + (clTemp - svs.clients)], "t"))) {
+								continue;
+							}
+							playersInGame++;
+						}
+						if (playersInGame > 0) {
+							SV_SendServerCommand(cl, "print \"You recently connected and must wait another %i seconds "
+                                                 "before calling a vote.\n\"",
+                                                 ((callvoteRequiredConnectTime - (svs.time - cl->lastConnectTime)) / 1000) + 1);
+							return;
+						}
+					}
+				}
+			}
+            
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
 		}
 	}

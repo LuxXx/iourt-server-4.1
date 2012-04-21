@@ -772,6 +772,8 @@ void SV_Init (void) {
     sv_CustomDisconnectCommand = Cvar_Get ("sv_CustomDisconnectCommand", "", CVAR_ARCHIVE );
     sv_CustomDisconnectMessage = Cvar_Get ("sv_CustomDisconnectMessage", "disconnected", CVAR_ARCHIVE );
     
+    sv_callvoteRequiredConnectTime = Cvar_Get("sv_callvoteRequiredConnectTime", "0", CVAR_ARCHIVE);
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
