@@ -187,6 +187,11 @@ typedef struct client_s {
 
     // MaJ -- A place to store what type of mod the user is. 0 for none, otherwise, (mod slot number + 1)
     int mod_slot;
+	vec3_t		savedPosition;
+	qboolean	positionIsSaved;
+	int		lastLoadPositionTime;
+	qboolean	allowGoto;
+	int		lastGotoTime;
     int nospeedCount;           // number of frames since the player has zero velocity
     
 	char				location[MAX_LOCATION_STRING];
@@ -281,6 +286,14 @@ typedef struct {
 								// knowing this sensitive information
 } serverStatic_t;
 
+#define SERVER_MAXUSERLOCS 8192
+typedef struct
+{
+	char map[MAX_QPATH];
+	char guid[MAX_CVAR_VALUE_STRING];
+	vec3_t pos;
+} userLoc_t;
+
 //=============================================================================
 
 extern	serverStatic_t	svs;				// persistant server info across maps
@@ -362,6 +375,12 @@ extern cvar_t *sv_moderatorremoteenable;    // MaJ - 1 to allow moderator comman
 extern cvar_t *sv_moderatorpass[MAX_MOD_LEVELS];    // MaJ - Mod passwords for each mod level. (empty string for disabled)
 extern cvar_t *sv_moderatorcommands[MAX_MOD_LEVELS];    // MaJ - Commands each ref is allowed to execute (separated by ,)
 
+//Save, load, goto
+extern	cvar_t	*sv_allowGoto;
+extern	cvar_t	*sv_gotoWaitTime;
+extern	cvar_t	*sv_allowLoadPosition;
+extern	cvar_t	*sv_loadPositionWaitTime;
+
 // String Replace
 extern	cvar_t	*sv_CensoredStrings;
 extern	cvar_t	*sv_CustomStrings;
@@ -405,6 +424,9 @@ extern	cvar_t	*sv_CustomDisconnectMessage;
 extern	cvar_t	*sv_callvoteRequiredConnectTime;
 
 extern	cvar_t	*sv_demonotice;
+
+extern userLoc_t userLocs[SERVER_MAXUSERLOCS];
+extern int userLocCount;
 
 //===========================================================
 
@@ -462,6 +484,9 @@ void SV_WriteDownloadToClient( client_t *cl , msg_t *msg );
 
 int SVC_GetModSlotByPassword(char *password);
 qboolean SV_ModCommandAllowed(char *allowed, char *command);
+
+void SV_ReadUserLocations(void);
+void SV_WriteUserLocations(void);
 
 //
 // sv_ccmds.c

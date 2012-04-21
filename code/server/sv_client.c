@@ -2425,6 +2425,379 @@ void SV_UpdateUserinfo_f( client_t *cl ) {
 	VM_Call( gvm, GAME_CLIENT_USERINFO_CHANGED, cl - svs.clients );
 }
 
+/*
+====================
+SV_ReadUserLocations
+====================
+*/
+void SV_ReadUserLocations(void)
+{
+    int filelen, tmp;
+    char *curpos;
+    fileHandle_t readfrom;
+    char filepath[MAX_QPATH];
+
+    userLocCount = 0;
+
+    if (!(curpos = Cvar_VariableString("fs_game")) || !*curpos)
+        curpos = BASEGAME;
+
+    Com_sprintf(filepath, sizeof(filepath), "%s/%s", curpos, "userlocs.dat");
+
+    if ((filelen = FS_SV_FOpenFileRead(filepath, &readfrom)) >= 0)
+    {
+        if (filelen < sizeof(int))
+            goto invalid;
+
+        FS_Read(&tmp, sizeof(int), readfrom);
+
+        if (tmp < 0 || tmp > sizeof(userLocs) ||
+            filelen != (sizeof(int) + tmp * sizeof(userLoc_t)))
+            goto invalid;
+
+        userLocCount = tmp;
+
+        FS_Read(userLocs, sizeof(userLoc_t) * userLocCount, readfrom);
+        FS_FCloseFile(readfrom);
+    }
+
+    return;
+
+  invalid:
+    Com_Printf("userlocs.dat file is invalid\n");
+    FS_FCloseFile(readfrom);
+}
+
+
+/*
+=====================
+SV_WriteUserLocations
+=====================
+*/
+void SV_WriteUserLocations(void)
+{
+    char *curpos;
+    fileHandle_t writeto;
+    char filepath[MAX_QPATH];
+
+    if (!(curpos = Cvar_VariableString("fs_game")) || !*curpos)
+        curpos = BASEGAME;
+
+    Com_sprintf(filepath, sizeof(filepath), "%s/%s", curpos, "userlocs.dat");
+
+    if ((writeto = FS_SV_FOpenFileWrite(filepath)))
+    {
+        FS_Write(&userLocCount, sizeof(int), writeto);
+        FS_Write(userLocs, sizeof(userLoc_t) * userLocCount, writeto);
+        FS_FCloseFile(writeto);
+    }
+}
+
+/*
+==================
+SV_DisplayGotoHelp_f
+==================
+*/
+static void SV_DisplayGotoHelp_f(client_t *cl) {
+	SV_SendServerCommand(cl, "print \"^3The following are commands for save/load position and goto:\n\"");
+	SV_SendServerCommand(cl, "print \"    ^3\\help   - show this list of commands\n\"");
+	SV_SendServerCommand(cl, "print \"    ^3\\save   - save current position\n\"");
+	SV_SendServerCommand(cl, "print \"    ^3\\load   - load saved position%s\n\"",
+			(sv_allowLoadPosition->integer > 0) ? "" : " (currently disabled)");
+	SV_SendServerCommand(cl, "print \"    ^3\\allowgoto    - allow players to teleport where you are\n\"");
+	SV_SendServerCommand(cl, "print \"    ^3\\goto <client>  - goto another player%s\n\"",
+			(sv_allowGoto->integer > 0) ? "" : " (currently disabled)");
+}
+
+
+/*
+==================
+SV_SavePosition_f
+==================
+*/
+static void SV_SavePosition_f(client_t *cl) {
+	int		clId;
+	playerState_t	*myState;
+	char *guid, *mapname;
+	int i;
+
+	if (!(sv_allowLoadPosition->integer > 0)) {
+		SV_SendServerCommand(cl, "print \"^Teleporting is disabled on server.\n\"");
+		return;
+	}
+	clId = cl - svs.clients;
+	if (TEAM_SPECTATOR == atoi(Info_ValueForKey(sv.configstrings[548 + clId], "t"))) {
+		SV_SendServerCommand(cl, "print \"^1You cannot be in spectators when saving your position.\n\"");
+		return;
+	}
+	myState = SV_GameClientNum(clId);
+	if (myState->pm_type != PM_NORMAL) {
+		SV_SendServerCommand(cl, "print \"^1You must be alive and in-game when saving your position.\n\"");
+		return;
+	}
+	if (Cmd_Argc() > 1) {
+		SV_SendServerCommand(cl, "print \"^1Too many arguments to saveposition command, none expected.\n\"");
+		return;
+	}
+	if (myState->groundEntityNum != ENTITYNUM_WORLD) {
+		SV_SendServerCommand(cl, "print \"^1You must be standing on solid ground when saving your position.\n\"");
+		return;
+	}
+	if (myState->velocity[0] != 0 || myState->velocity[1] != 0 || myState->velocity[2] != 0) {
+		SV_SendServerCommand(cl, "print \"^1You must be standing still when saving your position.\n\"");
+		return;
+	}
+
+	guid = Info_ValueForKey(cl->userinfo, "cl_guid");
+	mapname = sv_mapname->string;
+
+	// Find a save slot.
+	for (i = 0; i < sizeof(userLocs); i++)
+	{
+		userLoc_t *p = userLocs + i;
+
+		if (i < userLocCount
+			&& (Q_stricmp(guid, p->guid) || Q_stricmp(mapname, p->map)))
+			continue;
+
+		Q_strncpyz(p->guid, guid, MAX_CVAR_VALUE_STRING);
+		Q_strncpyz(p->map, mapname, MAX_QPATH);
+
+		VectorCopy(myState->origin, p->pos);
+
+		if (i == userLocCount)
+		userLocCount++;
+
+		break;
+	}
+
+	if (i == sizeof(userLocs))
+	{
+		SV_SendServerCommand(cl,
+							"print \"" S_COLOR_RED
+							"No more saving slots.\n\"");
+		return;
+	}
+
+		SV_WriteUserLocations();
+
+		cl->positionIsSaved = qtrue;
+		SV_SendServerCommand(cl, "print \"^2Your position has been saved.\n\"");
+}
+
+/*
+==================
+SV_LoadPosition_f
+==================
+*/
+static void SV_LoadPosition_f(client_t *cl)
+{
+	int		clId;
+	playerState_t	*myState;
+	char *guid, *mapname;
+	int		i;
+	int		loadPositionWaitTime, nextLoadPositionTime;
+
+	if (!(sv_allowLoadPosition->integer > 0)) {
+		SV_SendServerCommand(cl, "print \"^1Teleporting is disabled on server.\n\"");
+		return;
+	}
+	clId = cl - svs.clients;
+	if (TEAM_SPECTATOR == atoi(Info_ValueForKey(sv.configstrings[548 + clId], "t"))) {
+		SV_SendServerCommand(cl, "print \"^1You cannot be in spectators when loading saved position.\n\"");
+		return;
+	}
+	myState = SV_GameClientNum(clId);
+	if (myState->pm_type != PM_NORMAL) {
+		SV_SendServerCommand(cl, "print \"^1You must be alive and in-game when loading saved position.\n\"");
+		return;
+	}
+	if (Cmd_Argc() > 1) {
+		SV_SendServerCommand(cl, "print \"^1Too many arguments to loadposition command, none expected.\n\"");
+		return;
+	}
+	if (cl->lastLoadPositionTime > 0) { // Allow load position at "beginning of time" when svs.time is zero.
+		loadPositionWaitTime = sv_loadPositionWaitTime->integer;
+		if (loadPositionWaitTime < 0) { loadPositionWaitTime = 0; }
+		else if (loadPositionWaitTime > 3600) { loadPositionWaitTime = 3600; }
+		loadPositionWaitTime *= 1000;
+		nextLoadPositionTime = cl->lastLoadPositionTime + loadPositionWaitTime;
+		if (nextLoadPositionTime > svs.time) {
+			SV_SendServerCommand(cl, "print \"^1You must wait %i seconds before loading saved position again.\n\"",
+					((nextLoadPositionTime - svs.time) / 1000) + 1);
+			return;
+		}
+	}
+	guid = Info_ValueForKey(cl->userinfo, "cl_guid");
+	mapname = sv_mapname->string;
+
+	for (i = 0; i < userLocCount; i++)
+	{
+		userLoc_t *p = userLocs + i;
+
+		if (Q_stricmp(guid, p->guid) || Q_stricmp(mapname, p->map))
+		continue;
+
+		VectorCopy(p->pos, myState->origin);
+		VectorClear(myState->velocity);
+		cl->lastLoadPositionTime = svs.time;
+		SV_SendServerCommand(cl, "print \"^2You have been teleported to your last saved position.\n\"");
+		return;
+	}
+
+	SV_SendServerCommand(cl,
+						"print \"" S_COLOR_RED
+						"You have not saved your position on this map.\n\"");
+}
+
+
+/*
+==================
+SV_UserGetPlayerByHandle
+==================
+*/
+static client_t *SV_UserGetPlayerByHandle(char *s) {
+	client_t	*cl;
+	int		i, plid;
+	char		cleanName[64];
+
+	if (!com_sv_running->integer) { return NULL; }
+
+	for (i = 0; isdigit(s[i]); i++);
+	
+	if (!s[i]) {
+		plid = atoi(s);
+		if (plid >= 0 && plid < sv_maxclients->integer) {
+			cl = &svs.clients[plid];
+			if (cl->state) return cl;
+		}
+	}
+	for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++) {
+		if (!cl->state) { continue; }
+		if (!Q_stricmp(cl->name, s)) { return cl; }
+		Q_strncpyz(cleanName, cl->name, sizeof(cleanName));
+		Q_CleanStr(cleanName);
+		if (!Q_stricmp(cleanName, s)) { return cl; }
+	}
+	return NULL;
+}
+
+
+/*
+==================
+SV_UserAllowGoto_f
+==================
+*/
+static void SV_UserAllowGoto_f(client_t *cl) {
+    while (qtrue) { // Provides break structure.
+		if (Cmd_Argc() != 2) { break; }
+		if (strlen(Cmd_Argv(1)) != 1) { break; }
+		if (Cmd_Argv(1)[0] == '0') {
+			cl->allowGoto = qfalse;
+			SV_SendServerCommand(cl, "print \"^2Players now are ^1not ^2allowed to teleport to you.\n\"");
+			return;
+		}
+		if (Cmd_Argv(1)[0] == '1') {
+			cl->allowGoto = qtrue;
+			SV_SendServerCommand(cl, "print \"^2Players now are allowed to teleport to you.\n\"");
+			return;
+		}
+		break;
+	}
+	cl->allowGoto = !cl->allowGoto;
+	SV_SendServerCommand(cl, "print \"^2Players now are %s to teleport to you.\n\"",
+				cl->allowGoto ? "allowed" : "^1not ^2allowed");
+	if (cl->allowGoto) {
+		SV_SendServerCommand(cl, "print \" \n\"");
+	}
+	else {
+		SV_SendServerCommand(cl, "print \"  \n\"");
+	}
+}
+
+
+/*
+==================
+SV_Goto_f
+==================
+*/
+static void SV_Goto_f(client_t *cl) {
+	playerState_t	*myState;
+	int		myClId, targetClId;
+	int		gotoWaitTime, nextGotoTime;
+	client_t	*targetCl;
+	playerState_t	*targetState;
+
+	if (!(sv_allowGoto->integer > 0)) {
+		SV_SendServerCommand(cl, "print \"^1Goto is disabled on server.\n\"");
+		return;
+	}
+	myClId = cl - svs.clients;
+	if (TEAM_SPECTATOR == atoi(Info_ValueForKey(sv.configstrings[548 + myClId], "t"))) {
+		SV_SendServerCommand(cl, "print \"^1You cannot be in spectators when using goto.\n\"");
+		return;
+	}
+	myState = SV_GameClientNum(myClId);
+	if (myState->pm_type != PM_NORMAL) {
+		SV_SendServerCommand(cl, "print \"^1You must be alive and in-game when using goto.\n\"");
+		return;
+	}
+	if (Cmd_Argc() > 2) {
+		SV_SendServerCommand(cl, "print \"^1Too many arguments in goto command.\n\"");
+		return;
+	}
+	if (!(Cmd_Argv(1)[0])) {
+		SV_SendServerCommand(cl, "print \"^1You forgot to specify a goto target client.\n\"");
+		return;
+	}
+	if (cl->lastGotoTime > 0) { // Allow goto at "beginning of time" when svs.time is zero.
+		gotoWaitTime = sv_gotoWaitTime->integer;
+		if (gotoWaitTime < 0) { gotoWaitTime = 0; }
+		else if (gotoWaitTime > 3600) { gotoWaitTime = 3600; }
+		gotoWaitTime *= 1000;
+		nextGotoTime = cl->lastGotoTime + gotoWaitTime;
+		if (nextGotoTime > svs.time) {
+			SV_SendServerCommand(cl, "print \"^1You must wait %i seconds before using goto again.\n\"",
+					((nextGotoTime - svs.time) / 1000) + 1);
+			return;
+		}
+	}
+	targetCl = SV_UserGetPlayerByHandle(Cmd_Argv(1));
+	if (targetCl == NULL) {
+		SV_SendServerCommand(cl, "print \"^1You specified an invalid goto target client.\n\"");
+		return;
+	}
+	if (targetCl == cl) {
+		SV_SendServerCommand(cl, "print \"^1You cannot goto yourself! o_O\n\"");
+		return;
+	}
+	if (!targetCl->allowGoto) {
+		SV_SendServerCommand(cl, "print \"^6%s ^1does not allow goto\n\"", targetCl->name);
+		return;
+	}
+	targetClId = targetCl - svs.clients;
+	if (TEAM_SPECTATOR == atoi(Info_ValueForKey(sv.configstrings[548 + targetClId], "t"))) {
+		SV_SendServerCommand(cl, "print \"^6%s ^1is currently in spectators.\n\"", targetCl->name);
+		return;
+	}
+	targetState = SV_GameClientNum(targetCl - svs.clients);
+	if (targetState->pm_type != PM_NORMAL) {
+		SV_SendServerCommand(cl, "print \"^6%s ^1isn't currently alive or isn't in-game.\n\"", targetCl->name);
+		return;
+	}
+	/*
+	*/
+	VectorCopy(targetState->origin, myState->origin);
+	if (targetState->pm_flags & PMF_DUCKED) {
+		myState->pm_flags |= PMF_DUCKED;
+	}
+	cl->lastGotoTime = svs.time;
+	SV_SendServerCommand(cl, "print \"^2You teleported to %s\n\"", targetCl->name);
+	SV_SendServerCommand(targetCl, "print \"%s ^2teleported to you\n\"", cl->name);
+	VectorClear(myState->velocity);
+}
+
+
 typedef struct {
 	char	*name;
 	void	(*func)( client_t *cl );
@@ -2443,6 +2816,15 @@ static ucmd_t ucmds[] = {
     {"modlogout", SV_ModLogout_f},
     {"mod", SV_ModCommand_f},
 
+	{NULL, NULL}
+};
+
+static ucmd_t ucmds_floodControl[] = {
+	{"help", SV_DisplayGotoHelp_f},
+	{"save", SV_SavePosition_f},
+	{"load", SV_LoadPosition_f},
+	{"allowgoto", SV_UserAllowGoto_f},
+	{"goto", SV_Goto_f},
 	{NULL, NULL}
 };
 
@@ -2500,6 +2882,16 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 			break;
 		}
 	}
+
+	if (!bProcessed) {
+		for (u = ucmds_floodControl; u->name; u++) {
+			if (!Q_stricmp(Cmd_Argv(0), u->name)) {
+				if (clientOK) { u->func(cl); }
+				bProcessed = qtrue;
+				break;
+			}
+		}
+	}	
 
 	if (clientOK) {
 		// pass unknown strings to the game

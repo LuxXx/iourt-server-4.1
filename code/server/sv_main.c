@@ -103,6 +103,12 @@ cvar_t *sv_moderatorremoteenable;   // MaJ - 1 to allow moderator commands to be
 cvar_t *sv_moderatorpass[MAX_MOD_LEVELS];   // MaJ - Mod passwords for each mod level. (empty string for disabled)
 cvar_t *sv_moderatorcommands[MAX_MOD_LEVELS];   // MaJ - Commands each ref is allowed to execute (separated by ,)
 
+//goto, save and load
+cvar_t	*sv_allowGoto;
+cvar_t	*sv_gotoWaitTime;
+cvar_t	*sv_allowLoadPosition;
+cvar_t	*sv_loadPositionWaitTime;
+
 // String Replace
 cvar_t	*sv_CensoredStrings;
 cvar_t	*sv_CustomStrings;
@@ -146,6 +152,9 @@ cvar_t	*sv_CustomDisconnectMessage;
 cvar_t	*sv_callvoteRequiredConnectTime;
 
 cvar_t	*sv_demonotice;		// notice to print to a client being recorded server-side
+
+userLoc_t userLocs[SERVER_MAXUSERLOCS];
+int userLocCount = 0;
 
 /*
 =============================================================================

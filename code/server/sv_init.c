@@ -542,6 +542,9 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 				SV_DropClient( &svs.clients[i], denied );
 			} else {
                 svs.clients[i].muted = qfalse;
+				svs.clients[i].positionIsSaved = qfalse;
+				svs.clients[i].lastLoadPositionTime = 0;
+				svs.clients[i].lastGotoTime = 0;
 				if( !isBot ) {
 					// when we get the next packet from a connected client,
 					// the new gamestate will be sent
@@ -734,7 +737,13 @@ void SV_Init (void) {
         sv_moderatorcommands[i] =
         Cvar_Get(va("sv_moderatorcommands%i", i + 1), "", CVAR_ARCHIVE);
     }
-    
+
+	//goto, save and load
+	sv_allowGoto = Cvar_Get("sv_allowGoto", "0", CVAR_ARCHIVE);
+	sv_gotoWaitTime = Cvar_Get("sv_gotoWaitTime", "180", CVAR_ARCHIVE);
+	sv_allowLoadPosition = Cvar_Get("sv_allowLoadPosition", "0", CVAR_ARCHIVE);
+	sv_loadPositionWaitTime = Cvar_Get("sv_loadPositionWaitTime", "180", CVAR_ARCHIVE);
+
     // String Replace
     sv_CensoredStrings = Cvar_Get("sv_CensoredStrings", "0", CVAR_ARCHIVE);
     sv_CustomStrings = Cvar_Get("sv_CustomStrings", "0", CVAR_ARCHIVE);
