@@ -2522,7 +2522,7 @@ static void SV_SavePosition_f(client_t *cl) {
 	int i;
 
 	if (!(sv_allowLoadPosition->integer > 0)) {
-		SV_SendServerCommand(cl, "print \"^Teleporting is disabled on server.\n\"");
+		SV_SendServerCommand(cl, "print \"^1Teleporting is disabled on server.\n\"");
 		return;
 	}
 	clId = cl - svs.clients;
