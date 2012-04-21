@@ -1343,6 +1343,42 @@ static void SV_RadioSpoof_f(void)
 	Cmd_ExecuteString(cmd);
 }
 
+/*
+==========
+SV_DisplaySpoof_f
+spoofs a team and name
+player stay in his team
+and won't change his name it just seems so.
+==========
+*/
+static void SV_DisplaySpoof_f(void)
+{
+    client_t *cl;
+    char cmd[1024];
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0)
+    {
+        Com_Printf("Usage: displayspoof <player> <spoofname> <spoofteam>\n");
+        return;
+    }
+	
+    if (!(cl = SV_GetPlayerByHandle()))
+        return;
+    //     "n\^2LuxXx^3\t\1\r\3\tl\0\f0\\f1\\f2\\a0\100\a1\0\a2\11"
+    //     "n\name\t\team\r\3\tl\0\f0\\f1\\f2\\a0\100\a1\0\a2\11"
+    // TODO: add cg_rgb, model support?
+    
+	Q_snprintf(cmd, sizeof(cmd), "sendclientcommand all cs %i \"n\\%s\\t\\%i\\\n", cl - svs.clients + 548,Cmd_Argv(2), atoi(Cmd_Argv(3)));
+	Cmd_ExecuteString(cmd);
+}
+
 //===========================================================
 
 /*
@@ -1383,6 +1419,9 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("rs", SV_RadioSpoof_f);
     Cmd_AddCommand ("rspoof", SV_RadioSpoof_f);
     Cmd_AddCommand ("radiospoof", SV_RadioSpoof_f);
+    Cmd_AddCommand ("displayspoof", SV_DisplaySpoof_f);
+    Cmd_AddCommand ("dspoof", SV_DisplaySpoof_f);
+    Cmd_AddCommand ("ds", SV_DisplaySpoof_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
