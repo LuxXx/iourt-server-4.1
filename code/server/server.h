@@ -252,6 +252,14 @@ typedef struct {
 
 #define MAX_CONNECTS	256
 
+#define MAX_DROPS	256
+
+typedef struct {
+	netadr_t	adr;
+	int		time;
+	int		waitFactor;
+} drop_t;
+
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
 #define	MAX_PLAYERDB_PASSWORD_STRING	32
@@ -273,6 +281,7 @@ typedef struct {
 	receipt_t	infoReceipts[MAX_INFO_RECEIPTS];	// prevent getinfo/getstatus flood and DRDoS attacks
 	floodBan_t	infoFloodBans[MAX_INFO_FLOOD_BANS];
 	receipt_t	connects[MAX_CONNECTS];
+	drop_t		drops[MAX_DROPS];
 	netadr_t	redirectAddress;			// for rcon return messages
 
 	netadr_t	authorizeAddress;			// for rcon return messages
@@ -439,6 +448,8 @@ extern int userLocCount;
 
 extern	cvar_t	*sv_limitConnectPacketsPerIP;
 extern	cvar_t	*sv_maxClientsPerIP;
+
+extern	cvar_t	*sv_reconnectWaitTime;
 
 //===========================================================
 

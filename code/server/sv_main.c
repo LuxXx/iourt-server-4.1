@@ -162,6 +162,8 @@ int userLocCount = 0;
 cvar_t	*sv_limitConnectPacketsPerIP;
 cvar_t	*sv_maxClientsPerIP;
 
+cvar_t	*sv_reconnectWaitTime;
+
 /*
 =============================================================================
 

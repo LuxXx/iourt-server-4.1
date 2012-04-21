@@ -1061,6 +1061,29 @@ void SV_DirectConnect( netadr_t from ) {
 				}
 			}
 
+            int	reconnectWaitTime;
+			if ((reconnectWaitTime = sv_reconnectWaitTime->integer) > 0) {
+				if (reconnectWaitTime > 300) { // 5 minutes.
+					reconnectWaitTime = 300;
+				}
+				reconnectWaitTime *= 1000;
+				drop_t		*drop;
+				drop = &svs.drops[0];
+				for (i = 0; i < MAX_DROPS; i++, drop++) {
+					if (NET_CompareAdr(from, drop->adr)) {
+						int	reconnectAbsoluteTime;
+						reconnectAbsoluteTime = drop->time + drop->waitFactor * reconnectWaitTime;
+						if (reconnectAbsoluteTime > svs.time) {
+							NET_OutOfBandPrint(NS_SERVER, from,
+                                               "print\nReconnecting, please wait...\n");
+							Com_DPrintf("Client from %s waiting to reconnect\n",
+                                        NET_AdrToStringwPort(from));
+							return;
+						}
+					}
+				}
+			}
+
 			if ( sv_minPing->value && ping < sv_minPing->value ) {
 				NET_OutOfBandPrint( NS_SERVER, from, "print\nServer is for high pings only\n" );
 				Com_DPrintf ("Client %i rejected on a too low ping\n", i);
@@ -1295,6 +1318,38 @@ void SV_DropClient( client_t *drop, const char *reason ) {
 		}
 	}
 	*/
+
+    if (drop->netchan.remoteAddress.type != NA_BOT) {
+		drop_t		*dropRecord;
+		int		oldest;
+		int		oldestTime;
+		dropRecord = &svs.drops[0];
+		oldest = 0;
+		oldestTime = 0x7fffffff;
+		for (i = 0; i < MAX_DROPS; i++, dropRecord++) {
+			if (NET_CompareAdr(drop->netchan.remoteAddress, dropRecord->adr)) {
+				// Try to reuse a drop in case they're flooding and the attacker can't figure out
+				// to change the port each time.  (We could really get rid of this actually.)
+				break;
+			}
+			if (dropRecord->time < oldestTime) {
+				oldestTime = dropRecord->time;
+				oldest = i;
+			}
+		}
+		if (i == MAX_DROPS) {
+			dropRecord = &svs.drops[oldest];
+		}
+		dropRecord->adr = drop->netchan.remoteAddress;
+		dropRecord->time = svs.time;
+		dropRecord->waitFactor = 1;
+		if (!strcmp("was kicked", reason)) { // Vote kicked or kicked/banned by admin.
+			dropRecord->waitFactor = 2;
+		}
+		if (!strcmp("Teamkilling is bad m'kay?", reason)) { // Booted for team killing.
+			dropRecord->waitFactor = 3;
+		}
+	}
 
 	// Kill any download
 	SV_CloseDownload( drop );
