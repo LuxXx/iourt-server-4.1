@@ -2244,7 +2244,7 @@ void SV_Frame( int msec ) {
     // reset health of players with zero velocity
     
     if (sv_regainHealth->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) {
-        SV_ResetStamina();
+        SV_ResetHealth();
     }
     
 	// send a heartbeat to the master if needed
