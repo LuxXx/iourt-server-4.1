@@ -79,6 +79,9 @@ typedef struct {
 
 	int				restartTime;
 	int				time;
+	
+	int		lastCallvoteCyclemapTime;
+	qboolean	inCallvoteCyclemap;
 
 	qboolean			incognitoJoinSpec;
 
@@ -425,6 +428,8 @@ extern	cvar_t	*sv_CustomDisconnectMessage;
 extern	cvar_t	*sv_callvoteRequiredConnectTime;
 
 extern	cvar_t	*sv_demonotice;
+
+extern	cvar_t	*sv_callvoteCyclemapWaitTime;
 
 extern userLoc_t userLocs[SERVER_MAXUSERLOCS];
 extern int userLocCount;

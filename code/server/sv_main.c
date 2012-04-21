@@ -154,6 +154,8 @@ cvar_t	*sv_callvoteRequiredConnectTime;
 
 cvar_t	*sv_demonotice;		// notice to print to a client being recorded server-side
 
+cvar_t	*sv_callvoteCyclemapWaitTime;
+
 userLoc_t userLocs[SERVER_MAXUSERLOCS];
 int userLocCount = 0;
 
@@ -520,6 +522,14 @@ void QDECL SV_SendServerCommand(client_t *cl, const char *fmt, ...) {
 		else if (!strcmp((char *) message, "print \"The admin unmuted you.\"\n")) {
 			cl->muted = qfalse;
 		}
+	}
+
+	if (sv.inCallvoteCyclemap &&
+			cl == NULL &&
+			(!Q_strncmp((char *) message, "print \"", 7)) &&
+			msglen >= 17 + 7 &&
+			!strcmp(" called a vote.\n\"", ((char *) message) + msglen - 17)) {
+		sv.lastCallvoteCyclemapTime = svs.time;
 	}
 
 	if (sv.incognitoJoinSpec &&

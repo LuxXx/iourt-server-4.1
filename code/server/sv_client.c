@@ -2904,6 +2904,27 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 		if (!u->name && sv.state == SS_GAME) {
 			Cmd_Args_Sanitize();
 
+			qboolean goingToCallvoteCyclemap = qfalse;
+			if (Cmd_Argc() >= 2 && // If there are more arguments after "callvote cyclemap", it will still be a valid vote.
+					!Q_stricmp("callvote", Cmd_Argv(0)) &&
+					!Q_stricmp("cyclemap", Cmd_Argv(1))) {
+				int callvoteCyclemapWaitTime = sv_callvoteCyclemapWaitTime->integer;
+				if (sv.lastCallvoteCyclemapTime > 0 && // Allow cyclemap vote at start of map always.
+						callvoteCyclemapWaitTime > 0) {
+					if (callvoteCyclemapWaitTime > 1800) { // 30 minutes.
+						callvoteCyclemapWaitTime = 1800;
+					}
+					callvoteCyclemapWaitTime *= 1000;
+					int nextCallvoteCyclemapTime = sv.lastCallvoteCyclemapTime + callvoteCyclemapWaitTime;
+					if (nextCallvoteCyclemapTime > svs.time) {
+						SV_SendServerCommand(cl, "print \"Server won't accept repeated cyclemap vote for another %i seconds.\n\"",
+								((nextCallvoteCyclemapTime - svs.time) / 1000) + 1);
+						return;
+					}
+				}
+				goingToCallvoteCyclemap = qtrue;
+			}
+
 			argsFromOneMaxlen = -1;
 			if (Q_stricmp("say", Cmd_Argv(0)) == 0 ||
 					Q_stricmp("say_team", Cmd_Argv(0)) == 0) {
@@ -3123,8 +3144,9 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 					}
 				}
 			}
-            
+            if (goingToCallvoteCyclemap) { sv.inCallvoteCyclemap = qtrue; }
 			VM_Call( gvm, GAME_CLIENT_COMMAND, cl - svs.clients );
+			if (goingToCallvoteCyclemap) { sv.inCallvoteCyclemap = qfalse; }
 		}
 	}
 	else if (!bProcessed)

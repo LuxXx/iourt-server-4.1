@@ -788,6 +788,8 @@ void SV_Init (void) {
     sv_callvoteRequiredConnectTime = Cvar_Get("sv_callvoteRequiredConnectTime", "0", CVAR_ARCHIVE);
     
     sv_demonotice = Cvar_Get ("sv_demonotice", "Smile! You're on camera!", CVAR_ARCHIVE);
+	
+	sv_callvoteCyclemapWaitTime = Cvar_Get("sv_callvoteCyclemapWaitTime", "0", CVAR_ARCHIVE);
     
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
