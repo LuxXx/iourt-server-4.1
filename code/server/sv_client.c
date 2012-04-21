@@ -1368,6 +1368,36 @@ void SV_SendClientGameState( client_t *client ) {
 	SV_SendMessageToClient( &msg, client );
 }
 
+/*
+===================
+SV_UrT_FreeForAll_Kludge
+
+In UrT when g_gametype is switched to "Free for All" from
+a team-based gametype, bad things happen: Players will be
+on colored teams but colored teams don't exist so they do
+not show up on the score board. They also seem to change
+colors when shot. Fun and all, but not very convenient if
+you want to run a mixed-mode server. Thus this kludge.
+===================
+*/
+static void SV_UrT_FreeForAll_Kludge(client_t *client)
+{
+	int slot, team;
+	playerState_t *state;
+    
+	if (Cvar_VariableValue("g_gametype") == GT_FFA) {
+		slot = client - svs.clients;
+		state = SV_GameClientNum(slot);
+		team = state->persistant[PERS_TEAM];
+		Com_DPrintf("SV_UrT_FreeForAll_Kludge() found team %i for player %i\n", team, slot);
+        
+		if (team == TEAM_RED || team == TEAM_BLUE) {
+			Cmd_ExecuteString (va("forceteam %i spectator", slot));
+			Cmd_ExecuteString (va("forceteam %i ffa", slot));
+			Com_Printf("SV_UrT_FreeForAll_Kludge() forced player %i to team ffa\n", slot);
+		}
+	}
+}
 
 /*
 ==================
@@ -1397,6 +1427,11 @@ void SV_ClientEnterWorld( client_t *client, usercmd_t *cmd ) {
 
 	// call the game begin function
 	VM_Call( gvm, GAME_CLIENT_BEGIN, client - svs.clients );
+    // this has to be called *after* the UrT game code; it's funny: before the
+	// UrT game code runs, you're actually on team 0 as you should be for FFA;
+	// the UrT game code forces you back on your old team because it's insane;
+	// then we force it back (if we have to) in the kludge; wow :-/ [mad]
+	SV_UrT_FreeForAll_Kludge(client);
 }
 
 /*
