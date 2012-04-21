@@ -145,6 +145,8 @@ cvar_t	*sv_CustomDisconnectMessage;
 
 cvar_t	*sv_callvoteRequiredConnectTime;
 
+cvar_t	*sv_demonotice;		// notice to print to a client being recorded server-side
+
 /*
 =============================================================================
 
