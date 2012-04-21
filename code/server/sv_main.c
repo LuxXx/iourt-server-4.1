@@ -143,6 +143,7 @@ cvar_t	*sv_badRconMessage;
 cvar_t	*sv_disableDefaultMaps;
 
 cvar_t	*sv_regainStamina;
+cvar_t	*sv_regainHealth;
 
 cvar_t	*sv_MedicStation;
 
@@ -2076,6 +2077,39 @@ static void SV_ResetStamina(void) {
     }
 }
 
+/*
+==================
+SV_ResetHealth
+==================
+*/
+static void SV_ResetHealth(void) {
+    
+    int i;
+    
+    client_t *cl;
+    
+    playerState_t *ps;
+    
+    for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++)
+        
+    {
+        
+        if (cl->state != CS_ACTIVE) {
+            continue;
+        }
+        ps = SV_GameClientNum(i);
+        if (!ps->velocity[0] && !ps->velocity[1] && !ps->velocity[2])
+        {
+            if (++cl->nospeedCount >= sv_regainHealth->integer)
+            {
+                Cbuf_AddText( va( "gh %i \"+%i\"", i, 100) ); // needs qvm mod
+                cl->nospeedCount = 0;
+            }
+        }
+        else
+            cl->nospeedCount = 0;
+    }
+}
 
 /*
 ==================
@@ -2205,6 +2239,11 @@ void SV_Frame( int msec ) {
     // reset stamina of players with zero velocity
     
     if (sv_regainStamina->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) {
+        SV_ResetStamina();
+    }
+    // reset health of players with zero velocity
+    
+    if (sv_regainHealth->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) {
         SV_ResetStamina();
     }
     

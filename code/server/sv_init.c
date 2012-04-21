@@ -778,6 +778,7 @@ void SV_Init (void) {
     sv_disableDefaultMaps = Cvar_Get("sv_disableDefaultMaps", "0", CVAR_ARCHIVE);
     
     sv_regainStamina = Cvar_Get("sv_regainStamina", "0", CVAR_ARCHIVE);
+    sv_regainHealth = Cvar_Get("sv_regainHealth", "0", CVAR_ARCHIVE);
     
     sv_MedicStation = Cvar_Get ("sv_MedicStation", "0", CVAR_ARCHIVE );
     
