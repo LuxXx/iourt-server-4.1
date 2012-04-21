@@ -2823,6 +2823,12 @@ static ucmd_t ucmds_floodControl[] = {
 	{"help", SV_DisplayGotoHelp_f},
 	{"save", SV_SavePosition_f},
 	{"load", SV_LoadPosition_f},
+    {"saveposition", SV_SavePosition_f},
+	{"loadposition", SV_LoadPosition_f},
+    {"savelocation", SV_SavePosition_f},
+	{"loadlocation", SV_LoadPosition_f},
+    {"s", SV_SavePosition_f},
+	{"l", SV_LoadPosition_f},
 	{"allowgoto", SV_UserAllowGoto_f},
 	{"goto", SV_Goto_f},
 	{NULL, NULL}
