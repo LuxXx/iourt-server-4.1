@@ -250,6 +250,8 @@ typedef struct {
 
 #define MAX_INFO_FLOOD_BANS	36
 
+#define MAX_CONNECTS	256
+
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
 #define	MAX_PLAYERDB_PASSWORD_STRING	32
@@ -270,6 +272,7 @@ typedef struct {
 	challenge_t	challenges[MAX_CHALLENGES];	// to prevent invalid IPs from connecting
 	receipt_t	infoReceipts[MAX_INFO_RECEIPTS];	// prevent getinfo/getstatus flood and DRDoS attacks
 	floodBan_t	infoFloodBans[MAX_INFO_FLOOD_BANS];
+	receipt_t	connects[MAX_CONNECTS];
 	netadr_t	redirectAddress;			// for rcon return messages
 
 	netadr_t	authorizeAddress;			// for rcon return messages
@@ -433,6 +436,9 @@ extern	cvar_t	*sv_callvoteCyclemapWaitTime;
 
 extern userLoc_t userLocs[SERVER_MAXUSERLOCS];
 extern int userLocCount;
+
+extern	cvar_t	*sv_limitConnectPacketsPerIP;
+extern	cvar_t	*sv_maxClientsPerIP;
 
 //===========================================================
 

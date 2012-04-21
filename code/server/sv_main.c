@@ -159,6 +159,9 @@ cvar_t	*sv_callvoteCyclemapWaitTime;
 userLoc_t userLocs[SERVER_MAXUSERLOCS];
 int userLocCount = 0;
 
+cvar_t	*sv_limitConnectPacketsPerIP;
+cvar_t	*sv_maxClientsPerIP;
+
 /*
 =============================================================================
 

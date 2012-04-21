@@ -979,6 +979,32 @@ void SV_DirectConnect( netadr_t from ) {
 			return;
 		}
 
+        if (sv_limitConnectPacketsPerIP->integer > 0) {
+			// We limit 4 connect packets from one IP address in the past 6 seconds.
+			receipt_t *connect = &svs.connects[0];
+			int oldest = 0;
+			int oldestTime = 0x7fffffff;
+			int connectPacks = 1; // Count this packet as one.
+			for (i = 0; i < MAX_CONNECTS; i++, connect++) {
+				if (NET_CompareBaseAdr(from, connect->adr) &&
+                    connect->time + 6000 > svs.time) {
+					connectPacks++;
+				}
+				if (connect->time < oldestTime) {
+					oldestTime = connect->time;
+					oldest = i;
+				}
+			}
+			if (connectPacks > 4) {
+				Com_DPrintf("Ignoring connect packet from %s, seems to be spamming\n",
+                            NET_AdrToStringwPort(from));
+				return;
+			}
+			connect = &svs.connects[oldest];
+			connect->adr = from;
+			connect->time = svs.time;
+		}
+
 		qboolean firstConnect = !svs.challenges[i].connected;
 
 		///////////////////////////////////////////////////////
@@ -1098,15 +1124,28 @@ void SV_DirectConnect( netadr_t from ) {
 		startIndex = sv_privateClients->integer;
 	}
 
+    qboolean checkMaxClientsPerIP = ((sv_maxClientsPerIP->integer > 0) && (!Sys_IsLANAddress(from)));
+	int clientsThisIP = 0;
+    
 	newcl = NULL;
 	for ( i = startIndex; i < sv_maxclients->integer ; i++ ) {
 		cl = &svs.clients[i];
 		if (cl->state == CS_FREE) {
-			newcl = cl;
-			break;
+            if (newcl == NULL) { newcl = cl; }
+		}
+        // In this "else" statement, the client is _not_ CS_FREE.  Even if it's CS_ZOMBIE, count the
+		// the client if the IP address matches.
+		else if (checkMaxClientsPerIP && NET_CompareBaseAdr(from, cl->netchan.remoteAddress)) {
+			clientsThisIP++;
 		}
 	}
-
+	if (newcl != NULL && // If server is full, give them the "server full" message below.
+        checkMaxClientsPerIP && clientsThisIP >= sv_maxClientsPerIP->integer) {
+		NET_OutOfBandPrint(NS_SERVER, from, "print\nCurrently too many clients from your IP address.\n");
+		Com_DPrintf("Recected a connect, too many clients from IP address %s\n", NET_AdrToString(from));
+		return;
+	}
+    
 	if ( !newcl ) {
 		if ( NET_IsLocalAddress( from ) ) {
 			count = 0;

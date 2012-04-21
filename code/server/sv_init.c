@@ -791,6 +791,9 @@ void SV_Init (void) {
 	
 	sv_callvoteCyclemapWaitTime = Cvar_Get("sv_callvoteCyclemapWaitTime", "0", CVAR_ARCHIVE);
     
+    sv_limitConnectPacketsPerIP = Cvar_Get ("sv_limitConnectPacketsPerIP", "0", CVAR_ARCHIVE );
+	sv_maxClientsPerIP = Cvar_Get ("sv_maxClientsPerIP", "0", CVAR_ARCHIVE );
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
