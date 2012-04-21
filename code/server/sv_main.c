@@ -2031,7 +2031,17 @@ h = amount of health
 */
 void SV_GivePlayerHealth(int clId, int h) {
     Cbuf_AddText( va( "gh %i \"+%i\"\n", clId, h) ); // needs qvm mod
-    Cbuf_AddText( va( "scc %i cp \"%s\"",clId ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
+}
+
+/*
+==================
+SV_GivePlayerStamina
+i = client id
+h = amount of stamina
+==================
+*/
+void SV_GivePlayerStamina(int clId, int s) {
+    Cbuf_AddText( va( "gh %i \"+%i\"\n", clId, s) ); // needs qvm mod
 }
 
 /*
@@ -2052,6 +2062,7 @@ void SV_MedicStation( char* map, float x, float y, float r, float h ) {
         if (cl->state == CS_ACTIVE) {
             if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
                 SV_GivePlayerHealth(i, h); // Give him health
+                Cbuf_AddText( va( "scc %i cp \"%s\"",clId ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
             }
         }
     }
@@ -2082,7 +2093,7 @@ static void SV_ResetStamina(void) {
         {
             if (++cl->nospeedCount >= sv_regainStamina->integer)
             {
-                Cbuf_AddText( va( "gs %i \"+%i\"", i, 100) ); // needs qvm mod
+                SV_GivePlayerStamina(i, 100);
                 cl->nospeedCount = 0;
             }
         }
@@ -2116,7 +2127,7 @@ static void SV_ResetHealth(void) {
         {
             if (++cl->nospeedCount >= sv_regainHealth->integer)
             {
-                Cbuf_AddText( va( "gh %i \"+%i\"", i, 100) ); // needs qvm mod
+                SV_GivePlayerHealth(i, 100);
                 cl->nospeedCount = 0;
             }
         }
