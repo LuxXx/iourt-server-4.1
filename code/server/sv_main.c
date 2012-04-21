@@ -2051,7 +2051,6 @@ void SV_MedicStation( char* map, float x, float y, float r, float h ) {
 		cl = &svs.clients[i];
         if (cl->state == CS_ACTIVE) {
             if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
-                playerState_t *ps; 
                 SV_GivePlayerHealth(i, h); // Give him health
             }
         }
