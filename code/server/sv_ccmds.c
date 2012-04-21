@@ -1310,7 +1310,7 @@ static void SV_InvisiblePlayer_f(void)
     if (!(cl = SV_GetPlayerByHandle()))
         return;
     
-	Q_snprintf(cmd, sizeof(cmd), "sendclientcommand all cs %i \"n\\%s\\t\\%i\\\n", cl - svs.clients + 548, cl->name, 4);
+	Q_snprintf(cmd, sizeof(cmd), "sendclientcommand all cs %i \"\"\n", cl - svs.clients + 548);
 	Cmd_ExecuteString(cmd);
 }
 
