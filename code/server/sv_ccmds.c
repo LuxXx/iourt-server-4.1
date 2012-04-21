@@ -1321,7 +1321,6 @@ SV_RadioSpoof_f
 */
 static void SV_RadioSpoof_f(void)
 {
-    client_t *cl;
     char cmd[1024];
 	
     // make sure server is running
