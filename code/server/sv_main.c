@@ -2054,7 +2054,7 @@ static void SV_ResetStamina(void) {
         {
             if (++cl->nospeedCount >= sv_regainStamina->integer)
             {
-                //*((int *) (gvm->dataBase + 0x11194 + i * 4220)) = 30000; // FIXME: find the spot where this references to
+                Cbuf_AddText( va( "gs %i \"+%i\"", i, 100) ); // needs qvm mod
                 cl->nospeedCount = 0;
             }
         }
@@ -2190,11 +2190,11 @@ void SV_Frame( int msec ) {
 	SV_SendClientMessages();
 
     // reset stamina of players with zero velocity
-    /*
-    if (sv_regainStamina->integer > 0) {
+    
+    if (sv_regainStamina->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) {
         SV_ResetStamina();
     }
-    */
+    
 	// send a heartbeat to the master if needed
 	SV_MasterHeartbeat();
 
