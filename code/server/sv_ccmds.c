@@ -32,9 +32,9 @@ These commands can only be entered from stdin or by a remote operator datagram
 */
 
 /*
- Reusable version of SV_GetPlayerByHandle() that doesn't
- print any silly messages.
- */
+Reusable version of SV_GetPlayerByHandle() that doesn't
+print any silly messages.
+*/
 client_t *SV_BetterGetPlayerByHandle(const char *handle)
 {
 	client_t	*cl;
@@ -1843,8 +1843,8 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("displayspoof", SV_DisplaySpoof_f);
     Cmd_AddCommand ("dspoof", SV_DisplaySpoof_f);
     Cmd_AddCommand ("ds", SV_DisplaySpoof_f);
-    Cmd_AddCommand("startserverdemo", SV_StartServerDemo_f);
-	Cmd_AddCommand("stopserverdemo", SV_StopServerDemo_f);
+    Cmd_AddCommand ("startserverdemo", SV_StartServerDemo_f);
+	Cmd_AddCommand ("stopserverdemo", SV_StopServerDemo_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
@@ -1868,11 +1868,12 @@ void SV_AddOperatorCommands( void ) {
 		Cmd_AddCommand ("tell", SV_ConTell_f);
 	}
 
-	Cmd_AddCommand("forcecvar", SV_ForceCvar_f);
+	Cmd_AddCommand ("forcecvar", SV_ForceCvar_f);
 	////////////////////////////////////////////////////
 	// separator for forcecvar.patch and incognito.patch
 	////////////////////////////////////////////////////
 	Cmd_AddCommand ("sendclientcommand", SV_SendClientCommand_f);
+    Cmd_AddCommand ("scc", SV_SendClientCommand_f);
 	Cmd_AddCommand ("incognito", SV_Incognito_f);
 }
 
