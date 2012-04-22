@@ -2062,7 +2062,7 @@ void SV_MedicStation( char* map, float x, float y, float r, float h ) {
         if (cl->state == CS_ACTIVE) {
             if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
                 SV_GivePlayerHealth(i, h); // Give him health
-                Cbuf_AddText( va( "scc %i cp \"%s\"",clId ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
+                Cbuf_AddText( va( "scc %i cp \"%s\"",i ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
             }
         }
     }
