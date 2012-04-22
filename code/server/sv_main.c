@@ -164,6 +164,8 @@ cvar_t	*sv_maxClientsPerIP;
 
 cvar_t	*sv_reconnectWaitTime;
 
+cvar_t	*sv_TeleportStation;
+
 /*
 =============================================================================
 
@@ -2003,6 +2005,29 @@ qboolean SV_CheckPaused( void ) {
 
 /*
 ==================
+SV_TeleportPlayerToLocation
+==================
+*/
+void SV_TeleportPlayerToLocation(int clId, float x, float y, float z) {
+    char    cmd[64];
+    Com_sprintf(cmd, sizeof(cmd), "teleport %i %f %f %f\n", clId, x, y, z); // needs teleport command
+    Cmd_ExecuteString(cmd);
+}
+
+/*
+==================
+SV_TeleportPlayerToPlayer
+==================
+*/
+void SV_TeleportPlayerToPlayer(int clId, int targetclId) {
+    char    cmd[64];
+    
+    Com_sprintf(cmd, sizeof(cmd), "teleport %i %i\n", clId, targetclId); // needs teleport command
+    Cmd_ExecuteString(cmd);
+}
+
+/*
+==================
 SV_CheckLocation
 Returns 1 or -1
 1 = yes player i is in area of xy with the r
@@ -2049,6 +2074,30 @@ void SV_GivePlayerStamina(int clId, int s) {
     
     Com_sprintf(cmd, sizeof(cmd), "gs %i \"+%i\"\n", clId, s); // needs qvm mod
     Cmd_ExecuteString(cmd);
+}
+
+/*
+==================
+SV_TeleportStation
+==================
+*/
+void SV_TeleportStation( char* map, float x, float y, float r, float targetx, float targety, float targetz) {
+	client_t	*cl;
+	int i;
+	char		cmd[64];
+    
+	if (Q_stricmp(sv_mapname->string, map)) { // This TeleportStation is not on this map
+		return;
+	}
+    
+	for (i=0 ; i < sv_maxclients->integer ; i++) {
+		cl = &svs.clients[i];
+        if (cl->state == CS_ACTIVE) {
+            if (SV_CheckLocation(x, y, r, i) == 1) { // is player at TeleportStation
+                SV_TeleportPlayerToLocation(i, targetx, targety, targetz);
+            }
+        }
+    }
 }
 
 /*
@@ -2323,6 +2372,16 @@ void SV_Frame( int msec ) {
 		}
 		authClientInx++;
 	}
+    
+    if (sv_TeleportStation->integer > 0) {
+        // example teleport stations
+        // blue flag -> red flag
+        // they are hardcoded
+        // FIXME: move cfgs to file?
+        // may cause lags?
+        // FIXME: find a better spot to bind this?
+        SV_TeleportStation( "ut4_abbey", 112,-177,50,-856,1515,160);
+    }
     
     if (sv_MedicStation->integer > 0 && (Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) { // dont run if g_modversion is 4.1
         // example medic stations

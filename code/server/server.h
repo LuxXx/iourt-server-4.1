@@ -451,6 +451,8 @@ extern	cvar_t	*sv_maxClientsPerIP;
 
 extern	cvar_t	*sv_reconnectWaitTime;
 
+extern	cvar_t	*sv_TeleportStation;
+
 //===========================================================
 
 //
