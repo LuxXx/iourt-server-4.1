@@ -2022,6 +2022,7 @@ int SV_CheckLocation( float x, float y , float r, int i ) {
     }
 	return -1;
 }
+
 /*
 ==================
 SV_GivePlayerHealth
@@ -2030,7 +2031,10 @@ h = amount of health
 ==================
 */
 void SV_GivePlayerHealth(int clId, int h) {
-    Cbuf_AddText( va( "gh %i \"+%i\"\n", clId, h) ); // needs qvm mod
+    char    cmd[64];
+    
+    Com_sprintf(cmd, sizeof(cmd), "gh %i \"+%i\"\n", clId, h); // needs qvm mod
+    Cmd_ExecuteString(cmd);
 }
 
 /*
@@ -2041,7 +2045,10 @@ h = amount of stamina
 ==================
 */
 void SV_GivePlayerStamina(int clId, int s) {
-    Cbuf_AddText( va( "gh %i \"+%i\"\n", clId, s) ); // needs qvm mod
+    char    cmd[64];
+    
+    Com_sprintf(cmd, sizeof(cmd), "gs %i \"+%i\"\n", clId, s); // needs qvm mod
+    Cmd_ExecuteString(cmd);
 }
 
 /*
@@ -2052,7 +2059,8 @@ SV_MedicStation
 void SV_MedicStation( char* map, float x, float y, float r, float h ) {
 	client_t	*cl;
 	int i;
-	
+	char    cmd[64];
+    
 	if (Q_stricmp(sv_mapname->string, map)) { // This MedicStation is not on this map
 		return;
 	}
@@ -2062,7 +2070,8 @@ void SV_MedicStation( char* map, float x, float y, float r, float h ) {
         if (cl->state == CS_ACTIVE) {
             if (SV_CheckLocation(x, y, r, i) == 1) { // is player in MedicZone?
                 SV_GivePlayerHealth(i, h); // Give him health
-                Cbuf_AddText( va( "scc %i cp \"%s\"",i ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ) );
+                Com_sprintf(cmd, sizeof(cmd), "sendclientcommand %i cp \"%s\"\n",i ,"^2You are in a ^1Medic Zone ^7[^1+^7]" ); // needs qvm mod
+                Cmd_ExecuteString(cmd);
             }
         }
     }
