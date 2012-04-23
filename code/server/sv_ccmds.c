@@ -1865,6 +1865,34 @@ static void SV_BigText_f(void)
     return; // do not run the qvm bigtext
 }
 
+/*
+==========
+SV_CenterPrint_f
+==========
+*/
+static void SV_CenterPrint_f(void)
+{
+    client_t *cl;
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 3 || strlen(Cmd_Argv(2)) == 0)
+    {
+        Com_Printf("Usage: centerprint <player id> <message>\n");
+        return;
+    }
+	
+    if (!(cl = SV_GetPlayerByHandle()))
+        return;
+    
+    SV_SendServerCommand(cl, "cp \"%s\"",Cmd_Argv(2));
+}
+
 //===========================================================
 
 /*
@@ -1913,6 +1941,11 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("utxinfo", SV_utxinfo_f);
     Cmd_AddCommand ("utx", SV_utxinfo_f);
     Cmd_AddCommand ("bigtext", SV_BigText_f);
+    Cmd_AddCommand ("centerprint", SV_CenterPrint_f);
+    Cmd_AddCommand ("cprint", SV_CenterPrint_f);
+    Cmd_AddCommand ("cp", SV_CenterPrint_f);
+    Cmd_AddCommand ("privatebigtext", SV_CenterPrint_f);
+    Cmd_AddCommand ("pbigtext", SV_CenterPrint_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
