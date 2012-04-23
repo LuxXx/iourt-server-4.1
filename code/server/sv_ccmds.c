@@ -1841,6 +1841,30 @@ static void SV_utxinfo_f( void ) {
     }
 }
 
+/*
+==========
+SV_BigText_f
+==========
+*/
+static void SV_BigText_f(void)
+{
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.\n");
+        return;
+    }
+	
+    if (Cmd_Argc() < 2 || strlen(Cmd_Argv(1)) == 0)
+    {
+        Com_Printf("Usage: bigtext <string>\n");
+        return;
+    }
+    SV_SendServerCommand(NULL, "cp \"%s\"",Cmd_Args());
+    return; // do not run the qvm bigtext
+}
+
 //===========================================================
 
 /*
@@ -1888,6 +1912,7 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("stopserverdemo", SV_StopServerDemo_f);
     Cmd_AddCommand ("utxinfo", SV_utxinfo_f);
     Cmd_AddCommand ("utx", SV_utxinfo_f);
+    Cmd_AddCommand ("bigtext", SV_BigText_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
