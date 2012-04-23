@@ -1800,6 +1800,47 @@ static void SV_StopServerDemo_f(void)
 	}
 }
 
+/*
+================
+SV_utxinfo_f
+================
+*/
+static void SV_utxinfo_f( void ) {
+    if ((!Q_stricmp("4.1",Cvar_VariableString("g_modversion")))) {
+        Com_Printf("You do not use the modded utx/tsu qvm by Panda\n");
+        return;
+    }
+    Com_Printf("Version is %s but server spoofs %s\n",Cvar_VariableString("g_modversion"),Cvar_VariableString("sv_modversion"));
+    Com_Printf("\n");
+    if (strlen(Cvar_VariableString("utx_entFile")) != 0) {
+        Com_Printf("utx_entFile: %s\n",Cvar_VariableString("utx_entFile"));
+        Com_Printf("    suspected ent file: %s_%s.ent\n", sv_mapname->string, Cvar_VariableString("utx_entFile"));
+    }
+    else {
+        Com_Printf("utx_entFile: none loaded\n");
+    }
+    
+    Com_Printf("utx_fancynames: %s\n",Cvar_VariableString("utx_fancynames"));
+    if (strlen(Cvar_VariableString("utx_config")) != 0) {
+        Com_Printf("utx_config: %s\n",Cvar_VariableString("utx_config")); 
+    }
+    else {
+        Com_Printf("utx_config: none loaded\n");
+    }
+    if (strlen(Cvar_VariableString("utx_config")) != 0) {
+        Com_Printf("utx_rotation: %s\n",Cvar_VariableString("utx_rotation")); 
+    }
+    else {
+        Com_Printf("utx_rotation: none loaded\n");
+    }
+    if (strlen(Cvar_VariableString("utx_config")) != 0) {
+        Com_Printf("utx_submaps: %s\n",Cvar_VariableString("utx_submaps")); 
+    }
+    else {
+        Com_Printf("utx_submaps: none loaded\n");
+    }
+}
+
 //===========================================================
 
 /*
@@ -1845,6 +1886,8 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("ds", SV_DisplaySpoof_f);
     Cmd_AddCommand ("startserverdemo", SV_StartServerDemo_f);
 	Cmd_AddCommand ("stopserverdemo", SV_StopServerDemo_f);
+    Cmd_AddCommand ("utxinfo", SV_utxinfo_f);
+    Cmd_AddCommand ("utx", SV_utxinfo_f);
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
