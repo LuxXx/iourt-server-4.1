@@ -1893,6 +1893,54 @@ static void SV_CenterPrint_f(void)
     SV_SendServerCommand(cl, "cp \"%s\"",Cmd_Argv(2));
 }
 
+/*
+================
+SV_Guids_f
+================
+*/
+static void SV_Guids_f(void)
+{
+    int i, j, l;
+    client_t *cl;
+    playerState_t *ps;
+	
+    // make sure server is running
+    if (!com_sv_running->integer)
+    {
+        Com_Printf("Server is not running.n");
+        return;
+    }
+	
+    Com_Printf
+	("num name               guid                             password\n");
+    Com_Printf
+	("--- ------------------ -------------------------------- -----------------\n");
+	
+    for (i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++)
+    {
+        if (!cl->state)
+            continue;
+		
+        Com_Printf("%3i ", i);
+        ps = SV_GameClientNum(i);
+        Com_Printf("%s", cl->name);
+		
+        // TTimo adding a ^7 to reset the color
+        // NOTE: colored names in status breaks the padding (WONTFIX)
+        Com_Printf("^7");
+        l = 16 - strlen(cl->name);
+        for (j = 0; j < l; j++)
+            Com_Printf(" ");
+		
+        Com_Printf(" %s", Info_ValueForKey(cl->userinfo, "cl_guid"));
+		
+        Com_Printf(" %s", Info_ValueForKey(cl->userinfo, "password"));
+		
+        Com_Printf("\n");
+    }
+    Com_Printf("\n");
+}
+
 //===========================================================
 
 /*
@@ -1946,6 +1994,8 @@ void SV_AddOperatorCommands( void ) {
     Cmd_AddCommand ("cp", SV_CenterPrint_f);
     Cmd_AddCommand ("privatebigtext", SV_CenterPrint_f);
     Cmd_AddCommand ("pbigtext", SV_CenterPrint_f);
+    Cmd_AddCommand ("guids", SV_Guids_f);
+    
 	/*
 	Cmd_AddCommand ("banUser", SV_Ban_f);
 	Cmd_AddCommand ("banClient", SV_BanNum_f);
