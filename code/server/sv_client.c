@@ -3199,7 +3199,21 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_SendServerCommand(cl, "cp \"^7This map is currently disabled\"");
                 return;
             }
-
+            char AllDisabledMaps[1024];
+            strcpy(AllDisabledMaps,sv_disabledMaps->string);
+            char * DisabledMap;
+            DisabledMap = strtok (AllDisabledMaps,",");
+            if (strlen(sv_disabledMaps->string) != 0) {
+                while (DisabledMap != NULL)
+                {
+                    if (!Q_stricmp("callvote",Cmd_Argv(0)) && (!Q_stricmp("nextmap",Cmd_Argv(1)) || !Q_stricmp("map",Cmd_Argv(1))) && !Q_stricmp(DisabledMap,Cmd_Argv(2)))
+                    {
+                        SV_SendServerCommand(cl, "cp \"^7The map ^1%s^7 is currently disabled\"", Cmd_Argv(2));
+                        return;
+                    }
+                    DisabledMap = strtok (NULL, ",");
+                }
+            }
             if ( !Q_stricmp(sv_CustomDisconnectCommand->string, Cmd_Argv(0)) && strlen(sv_CustomDisconnectCommand->string) != 0) 
             {
                 // stop server-side demo (if any)

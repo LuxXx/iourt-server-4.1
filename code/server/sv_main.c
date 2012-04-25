@@ -168,6 +168,8 @@ cvar_t	*sv_TeleportStation;
 
 cvar_t	*sv_disableFlagDrop;
 
+cvar_t	*sv_disabledMaps;
+
 /*
 =============================================================================
 

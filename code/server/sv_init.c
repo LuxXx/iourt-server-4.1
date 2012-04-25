@@ -800,6 +800,8 @@ void SV_Init (void) {
     
     sv_disableFlagDrop = Cvar_Get("sv_disableFlagDrop", "0", CVAR_ARCHIVE);
     
+    sv_disabledMaps = Cvar_Get("sv_disabledMaps", "", CVAR_ARCHIVE);
+    
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
