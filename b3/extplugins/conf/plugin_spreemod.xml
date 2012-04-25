@@ -1,0 +1,22 @@
+<configuration plugin="spreemod">
+	<settings name="settings">
+		<set name="reset_spree">0</set>
+		<set name="min_level_spree_cmd">1</set>
+	</settings>
+
+	<settings name="killingspree_messages">
+	</settings>
+
+	<settings name="loosingspree_messages">
+	</settings>
+    
+    <settings name="winningspree_commands">
+		<set name="5">gw %player% A</set>
+        <set name="10">gw %player% "K 10 0"</set>
+        <set name="15">gw %player% "B 20"</set>
+	</settings>
+	
+    <settings name="loosingspree_commands">
+        <set name="5">gw %player% A</set>
+	</settings>
+</configuration>
