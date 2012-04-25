@@ -166,6 +166,8 @@ cvar_t	*sv_reconnectWaitTime;
 
 cvar_t	*sv_TeleportStation;
 
+cvar_t	*sv_disableFlagDrop;
+
 /*
 =============================================================================
 

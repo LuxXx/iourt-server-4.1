@@ -453,6 +453,8 @@ extern	cvar_t	*sv_reconnectWaitTime;
 
 extern	cvar_t	*sv_TeleportStation;
 
+extern	cvar_t	*sv_disableFlagDrop;
+
 //===========================================================
 
 //

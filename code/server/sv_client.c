@@ -3136,6 +3136,12 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_SendServerCommand(cl, "print \"This server does not allow radio chat.\n\"");
                 return;
             }
+            if (sv_disableFlagDrop->integer > 0 && !Q_stricmp("ut_itemdrop", Cmd_Argv(0)) && (!Q_stricmp("flag", Cmd_Argv(1)) || !Q_stricmp("1", Cmd_Argv(1)) || !Q_stricmp("2", Cmd_Argv(1)) )) // 1, 2 or flag are arg1 for teh flag
+                // i needed this for private purpose only
+            {
+                SV_SendServerCommand(cl,"print \"You can't drop the flag.\n\"");
+                return;
+            }
             if (cl->muted && (!Q_stricmp("say", Cmd_Argv(0)) ||
                               !Q_stricmp("say_team", Cmd_Argv(0)) ||
                               !Q_stricmp("info", Cmd_Argv(0)) ||
