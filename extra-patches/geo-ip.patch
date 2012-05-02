@@ -1,0 +1,180 @@
+# HG changeset patch
+# User diiigle[UbuntuSchlepper]
+# Date 1320242741 -3600
+# Node ID 22cd8b9dd7cdd17162cb409716822dcc03e8c7b5
+# Parent  8afc4a6218b7b0d194c0aa80070d4046c0ec0e2e
++Add GeoIP Support, connecting Player's IP will be traced and the location will be written to cl->location
+
+diff -r 8afc4a6218b7 -r 22cd8b9dd7cd CMakeLists.txt
+--- a/CMakeLists.txt	Sa Okt 01 16:14:42 2011 +0200
++++ b/CMakeLists.txt	Mi Nov 02 15:05:41 2011 +0100
+@@ -29,6 +29,8 @@
+ 	
+ option(MOD_MONEY
+     "Enable the MoneyMod" ON)
++option(USE_Geo_IP
++    "Enable GeoIP lookups via a local MaxMind database" ON)
+ 
+ option(USE_CURL
+     "Enable auto-download support using Curl (client only)" ON)
+@@ -83,6 +85,10 @@
+ if(MOD_MONEY)
+ 	add_definitions(-DMOD_MONEY)
+ endif()
++if(USE_Geo_IP)
++    add_definitions(-DGEO_IP)
++    find_package(GeoIP REQUIRED)
++endif()
+ 
+ if(USE_VOIP)
+     add_definitions(-DUSE_VOIP)
+@@ -136,6 +142,10 @@
+         ${ZLIB_LIBRARIES}
+         ${LUA_LIBRARIES}
+         ${OS_LIBRARIES})
++    if(USE_Geo_IP)
++	include_directories(${GEOIP_INCLUDE_DIR})
++        target_link_libraries(ioq3urt-server ${GEOIP_LIB})
++    endif()
+     set_target_properties(ioq3urt-server
+         PROPERTIES COMPILE_DEFINITIONS "DEDICATED")
+ 
+diff -r 8afc4a6218b7 -r 22cd8b9dd7cd code/server/server.h
+--- a/code/server/server.h	Sa Okt 01 16:14:42 2011 +0200
++++ b/code/server/server.h	Mi Nov 02 15:05:41 2011 +0100
+@@ -140,6 +140,17 @@
+     struct netchan_buffer_s *next;
+ } netchan_buffer_t;
+ 
++#ifdef GEO_IP
++#define MAX_LOCATION_STRING 30
++typedef struct
++{
++char cc[10];
++char country[MAX_LOCATION_STRING];
++char region[MAX_LOCATION_STRING];
++char city[MAX_LOCATION_STRING];
++}location_t;
++#endif
++
+ #ifdef MOD_MONEY
+ typedef struct
+ {
+@@ -218,6 +229,10 @@
+     buymenu_t buymenu;
+ #endif
+ 
++#ifdef GEO_IP
++	location_t location;
++#endif
++
+     int oldServerTime;
+     qboolean csUpdated[MAX_CONFIGSTRINGS + 1];
+     qboolean allowgoto;
+diff -r 8afc4a6218b7 -r 22cd8b9dd7cd code/server/sv_client.c
+--- a/code/server/sv_client.c	Sa Okt 01 16:14:42 2011 +0200
++++ b/code/server/sv_client.c	Mi Nov 02 15:05:41 2011 +0100
+@@ -155,6 +155,93 @@
+     return qfalse;
+ }
+ 
++#ifdef GEO_IP
++#include <GeoIP.h>
++#include <GeoIPCity.h>
++
++
++/*
++==================
++SV_GeoIpTrace
++
++Perform a request to the GeoIp.dat and write data to cl->location
++==================
++*/
++void SV_GeoIpTrace(client_t *cl)
++{
++    GeoIP * gi;
++    GeoIPRecord    *gir;
++    char * host;
++    const char * cc;
++    const char * country;
++    qboolean iscity;
++
++    host = Info_ValueForKey(cl->userinfo, "ip");
++    if(GeoIP_db_avail(GEOIP_CITY_EDITION_REV1))
++    {
++        gi = GeoIP_open_type(GEOIP_CITY_EDITION_REV1,GEOIP_STANDARD);
++        iscity = qtrue;
++    }
++    else if(GeoIP_db_avail(GEOIP_COUNTRY_EDITION) )
++    {
++        gi = GeoIP_new(GEOIP_STANDARD);
++        iscity = qfalse;
++    }
++    else{ 
++        //No free GeoIP Database availiable
++        Com_DPrintf("Could not Trace back the IP of %s: No GeoIP Database found",cl->name);
++        return;}
++    if(iscity){
++        gir = GeoIP_record_by_addr(gi, (const char *) host);
++        if(gir != NULL){
++            cc = gir->country_code;
++            country = gir->country_name;
++
++            memcpy(cl->location.cc,cc,strlen(cc)+1);
++            memcpy(cl->location.country,country,strlen(country)+1);
++
++            if(gir->region && gir->city)
++            {
++                memcpy(cl->location.city,gir->city,strlen(gir->city)+1);
++                memcpy(cl->location.region,GeoIP_region_name_by_code(gir->country_code, gir->region),strlen(GeoIP_region_name_by_code(gir->country_code, gir->region))+1);
++                iscity = qtrue;
++            }
++            else{iscity = qfalse;}
++            
++            GeoIPRecord_delete(gir);
++        }
++        else{
++            strcpy(cl->location.cc,"EN");
++            strcpy(cl->location.country,"unknown");
++            iscity = qfalse;
++        }
++    }
++    else
++    {
++        cc = GeoIP_country_code_by_addr(gi,host);
++        country = GeoIP_country_name_by_addr(gi,host);
++        if(cc && country){
++            memcpy(cl->location.cc,cc,strlen(cc)+1);
++            memcpy(cl->location.country,country,strlen(country)+1);
++        }
++        else{
++            strcpy(cl->location.cc,"EN");
++            strcpy(cl->location.country,"unknown");
++        }            
++    }
++    
++    //Broadcast to everyone
++    if(iscity)
++    {
++        SV_SendServerCommand(NULL,"print \"^7from %s, %s[%s]\"",cl->location.city,cl->location.region,cl->location.cc);
++    }
++    else
++    {
++        SV_SendServerCommand(NULL,"print \"^7from %s[%s]\"",cl->location.country,cl->location.cc);
++    }
++    
++}
++#endif
+ /*
+ ==================
+ SV_DirectConnect
+@@ -471,6 +558,9 @@
+     cl->buymenu.CurDir[0] = 0;
+ #endif
+ 
++#ifdef GEO_IP
++	SV_GeoIpTrace(newcl);
++#endif
+     // when we receive the first packet from the client, we will
+     // notice that it is from a different serverid and that the
+     // gamestate message was not just sent, forcing a retransmit
