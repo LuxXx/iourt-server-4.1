@@ -170,6 +170,8 @@ cvar_t	*sv_disableFlagDrop;
 
 cvar_t	*sv_disabledMaps;
 
+cvar_t	*sv_colorchat;
+
 /*
 =============================================================================
 
@@ -404,6 +406,16 @@ void str_ChangeServerStrings( char *s ) {
 	// " ^7was ^3SLAPPED!^7 by the Admin"
 	// " ^7you've been ^3SLAPPED!"
 	
+    // LuxXx' ColorChat
+    // String to hook: ": ^3"
+    if (strlen(sv_colorchat->string) != 0) {
+        char color[64]= ": ^3";
+        Com_sprintf(color, sizeof(color), ": ^3^%i", sv_colorchat->integer);
+        if ( (i = str_CheckString(": ^3",s)) != -1) {
+            str_ChangeTo( s, &len, i, 4, color, strlen(color) );
+        }
+    }
+    
 }
 
 void str_CensorThisString( char *s ) {

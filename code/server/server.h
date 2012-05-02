@@ -457,6 +457,8 @@ extern	cvar_t	*sv_disableFlagDrop;
 
 extern	cvar_t	*sv_disabledMaps; // all maps you want to disable to get voted (nextmap and map - separated by ,)
 
+extern	cvar_t	*sv_colorchat;
+
 //===========================================================
 
 //
