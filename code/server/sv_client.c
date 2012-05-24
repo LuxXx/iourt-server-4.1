@@ -3228,7 +3228,23 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
                 SV_SendServerCommand(cl,"print \"Version: %s | %s\n\"",Cvar_VariableString("version"),Cvar_VariableString("g_modversion"));
                 return;
             }
-            
+            if (sv_democommands->integer > 0) {
+                if (!Q_stricmp("demome", Cmd_Argv(0))) {
+                    if (!(cl->demo_recording)) {
+                        Cbuf_ExecuteText(EXEC_NOW, va("startserverdemo %d", (int)(cl-svs.clients)));
+                    }
+                    else {
+                        SV_SendServerCommand(cl,"print \"You are already recording a server demo.\n\"");
+                    }
+                    return;
+                }
+                if (!Q_stricmp("stopdemo", Cmd_Argv(0)))
+                {
+                    Cbuf_ExecuteText(EXEC_NOW, va("stopserverdemo %d", (int)(cl-svs.clients)));
+                    SV_SendServerCommand(cl,"print \"Your demo was stopped.\n\"");
+                    return;
+                }
+            }
             if (!Q_stricmp("callvote", Cmd_Argv(0))) {
 				int callvoteRequiredConnectTime = sv_callvoteRequiredConnectTime->integer;
 				if (callvoteRequiredConnectTime > 0) {
