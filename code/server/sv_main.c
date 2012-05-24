@@ -172,6 +172,8 @@ cvar_t	*sv_disabledMaps;
 
 cvar_t	*sv_colorchat;
 
+cvar_t	*sv_democommands;
+
 /*
 =============================================================================
 

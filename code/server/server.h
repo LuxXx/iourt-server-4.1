@@ -459,6 +459,8 @@ extern	cvar_t	*sv_disabledMaps; // all maps you want to disable to get voted (ne
 
 extern	cvar_t	*sv_colorchat;
 
+extern	cvar_t	*sv_democommands;
+
 //===========================================================
 
 //
