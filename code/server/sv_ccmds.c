@@ -459,6 +459,7 @@ Ban a user from being able to play on this server through the auth
 server
 ==================
 */
+/*
 static void SV_Ban_f( void ) {
 	client_t	*cl;
 
@@ -506,7 +507,7 @@ static void SV_Ban_f( void ) {
 		Com_Printf("%s was banned from coming back\n", cl->name);
 	}
 }
-
+*/
 /*
 ==================
 SV_BanNum_f
@@ -515,6 +516,7 @@ Ban a user from being able to play on this server through the auth
 server
 ==================
 */
+/*
 static void SV_BanNum_f( void ) {
 	client_t	*cl;
 
@@ -560,7 +562,7 @@ static void SV_BanNum_f( void ) {
 		Com_Printf("%s was banned from coming back\n", cl->name);
 	}
 }
-
+*/
 /*
 ==================
 SV_KickNum_f

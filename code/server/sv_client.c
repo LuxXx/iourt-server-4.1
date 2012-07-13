@@ -996,8 +996,7 @@ void SV_DirectConnect( netadr_t from ) {
 				}
 			}
 			if (connectPacks > 4) {
-				Com_DPrintf("Ignoring connect packet from %s, seems to be spamming\n",
-                            NET_AdrToStringwPort(from));
+				Com_DPrintf("Ignoring a connect packet, seems to be spamming\n");
 				return;
 			}
 			connect = &svs.connects[oldest];
