@@ -2110,7 +2110,6 @@ SV_TeleportStation
 void SV_TeleportStation( char* map, float x, float y, float r, float targetx, float targety, float targetz) {
 	client_t	*cl;
 	int i;
-	char		cmd[64];
     
 	if (Q_stricmp(sv_mapname->string, map)) { // This TeleportStation is not on this map
 		return;
